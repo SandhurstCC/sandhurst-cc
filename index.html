@@ -811,7 +811,7 @@ function renderManager(app) {
             <div class="tog${av==='yes'?' ay':''}" style="${isMe?'padding:5px 10px':''}" onclick="setAvailFn('${mid}','${p.id}','yes')">${isMe?'Yes':'Y'}</div>
             <div class="tog${av==='maybe'?' am':''}" style="${isMe?'padding:5px 10px':''}" onclick="setAvailFn('${mid}','${p.id}','maybe')">${isMe?'Maybe':'M'}</div>
             <div class="tog${av==='no'?' an':''}" style="${isMe?'padding:5px 10px':''}" onclick="setAvailFn('${mid}','${p.id}','no')">${isMe?'No':'N'}</div>
-          </div>`:\`<span class="avail-tag ${tCls}">${tLbl}</span>\`}
+          </div>`:`<span class="avail-tag ${tCls}">${tLbl}</span>`}
         </div>`;
       });
       h+=`</div>`;
