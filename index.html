@@ -74,9 +74,9 @@ input:focus,select:focus{outline:none;border-color:#1a5c2e;box-shadow:0 0 0 3px 
 .tog.ay{background:#d4eadc;border-color:#9fd4a4;color:#1a5c2e}
 .tog.an{background:#fcebeb;border-color:#f09595;color:#a32d2d}
 .tog.am{background:#faeeda;border-color:#fac775;color:#854f0b}
-.match-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;scrollbar-width:none}
+.match-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x}
 .match-scroll::-webkit-scrollbar{display:none}
-.mtab{flex-shrink:0;padding:8px 14px;border-radius:10px;border:1.5px solid #ddd;cursor:pointer;font-size:12px;font-weight:500;color:#888;background:#fafafa;text-align:left;transition:all .15s;min-width:130px}
+.mtab{flex-shrink:0;padding:8px 14px;border-radius:10px;border:1.5px solid #ddd;cursor:pointer;font-size:12px;font-weight:500;color:#888;background:#fafafa;text-align:left;transition:all .15s;min-width:130px;touch-action:manipulation}
 .mtab.home{border-left:4px solid #1a5c2e}
 .mtab.away{border-left:4px solid #185fa5}
 .mtab.active.home{background:#d4eadc;color:#1a5c2e;border-color:#9fd4a4;border-left-color:#1a5c2e}
@@ -100,9 +100,9 @@ input:focus,select:focus{outline:none;border-color:#1a5c2e;box-shadow:0 0 0 3px 
 .login-card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 .error{color:#a32d2d;font-size:13px;margin:-4px 0 10px;text-align:center;padding:6px;background:#fcebeb;border-radius:8px}
 .success{color:#1a5c2e;font-size:13px;margin:-4px 0 10px;text-align:center;padding:6px;background:#d4eadc;border-radius:8px}
-.mgmt-tabs{display:flex;gap:5px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
+.mgmt-tabs{display:flex;gap:5px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x}
 .mgmt-tabs::-webkit-scrollbar{display:none}
-.mgtab{flex-shrink:0;padding:7px 14px;border-radius:10px;border:1px solid #ddd;cursor:pointer;font-size:13px;font-weight:500;color:#888;background:#fafafa;position:relative}
+.mgtab{flex-shrink:0;padding:7px 14px;border-radius:10px;border:1px solid #ddd;cursor:pointer;font-size:13px;font-weight:500;color:#888;background:#fafafa;position:relative;touch-action:manipulation}
 .mgtab.active{background:#1a5c2e;color:#fff;border-color:#1a5c2e}
 .nbadge{position:absolute;top:-5px;right:-5px;background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center}
 .bat-num{width:26px;height:26px;border-radius:50%;background:#e6f1fb;color:#185fa5;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -290,9 +290,13 @@ function initFirebase() {
 
 const fbSet = async (path,val) => { if(!window._firebaseReady)return; await window._set(window._ref(window._db,path),val); };
 
+let _lastNotifText = ''; let _lastNotifTs = 0;
 async function addNotif(text,target,matchId,type) {
+  // Debounce: ignore duplicate notifications within 5 seconds
+  if (text===_lastNotifText && Date.now()-_lastNotifTs < 5000) return;
+  _lastNotifText=text; _lastNotifTs=Date.now();
   const id='n'+Date.now();
-  await fbSet(`sandhurst/notifications/${id}`,{id,ts:Date.now(),text,target,matchId:matchId||null,type:type||'info',read:{}});
+  fbSet(`sandhurst/notifications/${id}`,{id,ts:Date.now(),text,target,matchId:matchId||null,type:type||'info',read:{}});
 }
 
 async function markRead() {
@@ -376,7 +380,7 @@ window.doRegister = async function() {
 window.doLogout = async function() {
   await releaseLock();
   S.screen='login'; S.currentUser=null; S.nameInput=''; S.pinInput='';
-  S.newPin=''; S.confirmPin=''; S.pinError=''; render();
+  S.newPin=''; S.confirmPin=''; S.pinError=''; S._notifMarked=false; render();
 };
 
 // ── PROFILE (change name / PIN) ───────────────────────────────────────────────
@@ -830,7 +834,9 @@ function renderMember(app) {
     h+=`</div>`;
   }
   app.innerHTML=h;
-  setTimeout(()=>markRead(),1000);
+  // Only mark read if we actually scrolled to bottom (notifications visible)
+  // Use a flag to avoid calling on every render
+  if (!S._notifMarked) { S._notifMarked=true; setTimeout(()=>{ markRead(); },1500); }
 }
 
 // ── MANAGER SCREEN ────────────────────────────────────────────────────────────
