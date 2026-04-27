@@ -276,6 +276,11 @@ function initFirebase() {
       const fresh = S.users[S.currentUser.id];
       if (fresh) S.currentUser = fresh;
     }
+    // Don't re-render screens where user is actively typing
+    if (S.screen==='changePin' || S.screen==='register') {
+      // Just update data silently, don't re-render
+      return;
+    }
     S.unreadNotifs = S.notifications.filter(n=>{
       if (!S.currentUser) return false;
       const key = S.currentUser.role==='member'?S.currentUser.id:'manager';
@@ -329,14 +334,17 @@ window.doLogin = function() {
 };
 
 window.doChangePin = async function() {
-  if (S.newPin.length < 4) { S.pinError='PIN must be at least 4 digits.'; render(); return; }
-  if (S.newPin !== S.confirmPin) { S.pinError='PINs do not match.'; render(); return; }
-  if (S.newPin==='1000') { S.pinError='Please choose a different PIN.'; render(); return; }
-  await fbSet(`sandhurst/users/${S.currentUser.id}/pin`, hashPin(S.newPin));
+  const np   = document.getElementById('change-pin-new')?.value?.trim() || '';
+  const conf = document.getElementById('change-pin-conf')?.value?.trim() || '';
+  if (np.length < 4) { S.pinError='PIN must be at least 4 digits.'; render(); return; }
+  if (np !== conf) { S.pinError='PINs do not match.'; render(); return; }
+  if (np==='1000') { S.pinError='Please choose a different PIN.'; render(); return; }
+  if (!S.currentUser?.id) { S.pinError='Session error — please log in again.'; S.screen='login'; render(); return; }
+  await fbSet(`sandhurst/users/${S.currentUser.id}/pin`, hashPin(np));
   await fbSet(`sandhurst/users/${S.currentUser.id}/mustChange`, false);
-  S.currentUser = {...S.currentUser, pin:hashPin(S.newPin), mustChange:false};
-  S.newPin=''; S.confirmPin=''; S.pinError='';
-  S.screen = S.currentUser.role==='manager'?'manager':'member';
+  S.currentUser = {...S.currentUser, pin:hashPin(np), mustChange:false};
+  S.pinError='';
+  S.screen = (S.currentUser.role==='manager'||S.currentUser.role==='readonly') ? 'manager' : 'member';
   showBanner('PIN updated successfully');
   render();
 };
@@ -612,7 +620,7 @@ function renderLogin(app) {
     <div class="login-sub">Sign in to continue</div>
     <div class="login-card">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Your name</label>
-      <input id="name-inp" type="text" placeholder="e.g. Ben Stinton" autocomplete="name"
+      <input id="name-inp" type="text" placeholder="e.g. Joe Root" autocomplete="name"
         value="${S.nameInput}" oninput="S.nameInput=this.value" onkeydown="if(event.key==='Enter')document.getElementById('pin-inp').focus()">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">PIN</label>
       <input id="pin-inp" type="password" placeholder="Enter PIN" inputmode="numeric"
@@ -636,12 +644,11 @@ function renderChangePin(app) {
     <div class="login-sub">Welcome ${S.currentUser?.name?.split(' ')[0] || 'there'}! Choose a personal PIN to use from now on.</div>
     <div class="login-card">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">New PIN (4+ digits)</label>
-      <input type="password" placeholder="New PIN" inputmode="numeric"
-        value="${S.newPin}" oninput="S.newPin=this.value"
+      <input id="change-pin-new" type="password" placeholder="New PIN" inputmode="numeric"
         style="letter-spacing:4px;font-size:18px;text-align:center;margin-bottom:10px">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Confirm PIN</label>
-      <input type="password" placeholder="Confirm PIN" inputmode="numeric"
-        value="${S.confirmPin}" oninput="S.confirmPin=this.value" onkeydown="if(event.key==='Enter')doChangePin()"
+      <input id="change-pin-conf" type="password" placeholder="Confirm PIN" inputmode="numeric"
+        onkeydown="if(event.key==='Enter')doChangePin()"
         style="letter-spacing:4px;font-size:18px;text-align:center">
       ${S.pinError?`<div class="error">${S.pinError}</div>`:''}
       <button class="btn primary" onclick="doChangePin()">Set PIN &amp; continue</button>
