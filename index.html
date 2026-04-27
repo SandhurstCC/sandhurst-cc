@@ -221,7 +221,12 @@ const fmtDate = d => { if(!d)return''; const p=d.split('-'); return `${p[2]}/${p
 const getMatch= id => Object.values(S.matches).find(m=>m.id===id) || Object.values(S.matches)[0] || {id:'',opponent:'',date:'',time:'',venue:''};
 const getAvail= (mid,uid) => (S.availability[mid]||{})[uid] || 'none';
 const getSquad= mid => S.squad[mid] || [];
-const activePlayers = () => Object.values(S.users).filter(u=>u.status==='active').sort((a,b)=>a.name.localeCompare(b.name));
+const activePlayers = () => {
+  const fromDb = Object.values(S.users).filter(u=>u.status==='active');
+  if (fromDb.length > 0) return fromDb.sort((a,b)=>a.name.localeCompare(b.name));
+  // Fallback to seed data while Firebase loads
+  return SEED_USERS.filter(u=>u.status==='active').sort((a,b)=>a.name.localeCompare(b.name));
+};
 const pendingPlayers= () => Object.values(S.users).filter(u=>u.status==='pending');
 const availCount  = (mid,val) => activePlayers().filter(p=>getAvail(mid,p.id)===val).length;
 const iAmLock     = () => S.lockHolder && S.lockHolder===S.currentUser?.id && Date.now()<(S.lockExpiry||0);
@@ -276,12 +281,17 @@ function initFirebase() {
     S.lockHolder = data.lock?.holder||null;
     S.lockExpiry = data.lock?.expiry||null;
     S.syncLive   = true;
-    // Refresh currentUser from db - but only update safe fields, never overwrite pin mid-session
+    // Refresh currentUser - restore pin from sessionStorage, never from Firebase
     if (S.currentUser) {
       const fresh = S.users[S.currentUser.id];
+      const savedPin = (()=>{ try { return sessionStorage.getItem('scc_pin'); } catch(e){ return null; } })();
+      const savedMc  = (()=>{ try { return sessionStorage.getItem('scc_mc'); } catch(e){ return null; } })();
       if (fresh) {
-        // Keep the local pin and mustChange values - don't overwrite with stale seed data
-        S.currentUser = {...fresh, pin: S.currentUser.pin, mustChange: S.currentUser.mustChange};
+        S.currentUser = {
+          ...fresh,
+          pin: savedPin || S.currentUser.pin,
+          mustChange: savedMc !== null ? savedMc==='1' : S.currentUser.mustChange
+        };
       }
     }
     // Never re-render screens where user is actively typing - just update data silently
@@ -336,6 +346,8 @@ window.doLogin = function() {
   if (!user) { S.pinError='Name not recognised. Check spelling or register below.'; render(); return; }
   if (user.pin !== hashPin(pin)) { S.pinError='Incorrect PIN.'; render(); return; }
   S.currentUser = {...user};
+  // Save session PIN to sessionStorage so Firebase refreshes can't overwrite it
+  try { sessionStorage.setItem('scc_pin', user.pin); sessionStorage.setItem('scc_uid', user.id); sessionStorage.setItem('scc_mc', user.mustChange?'1':'0'); } catch(e){}
   S.pinError = '';
   S.nameInput = ''; S.pinInput = '';
   if (user.mustChange) { S.screen='changePin'; S.newPin=''; S.confirmPin=''; S.pinError=''; render(); return; }
@@ -358,6 +370,8 @@ window.doChangePin = async function() {
   const hashed = hashPin(np);
   // Update local state immediately so Firebase re-renders don't break anything
   S.currentUser = {...S.currentUser, pin:hashed, mustChange:false};
+  // Update sessionStorage with new PIN
+  try { sessionStorage.setItem('scc_pin', hashed); sessionStorage.setItem('scc_mc', '0'); } catch(e){}
   S.pinError='';
   S.screen = (role==='manager'||role==='readonly') ? 'manager' : 'member';
   render();
@@ -388,8 +402,9 @@ window.doRegister = async function() {
 
 window.doLogout = async function() {
   await releaseLock();
+  try { sessionStorage.removeItem('scc_pin'); sessionStorage.removeItem('scc_uid'); sessionStorage.removeItem('scc_mc'); } catch(e){}
   S.screen='login'; S.currentUser=null; S.nameInput=''; S.pinInput='';
-  S.newPin=''; S.confirmPin=''; S.pinError=''; S._notifMarked=false; render();
+  S.newPin=''; S.confirmPin=''; S.pinError=''; render();
 };
 
 // ── PROFILE (change name / PIN) ───────────────────────────────────────────────
