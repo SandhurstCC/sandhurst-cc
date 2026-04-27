@@ -438,58 +438,50 @@ function rMember(app){
   if(m.id){
     h+=`<span class="pill ${m.venue==='Home'?'home':'away'}">vs ${m.opponent} · ${fmtD(m.date)}${m.time?' at '+m.time:''} · ${m.venue}</span>`;
     if(lk)h+=`<div class="banner-err">🔒 Availability locked ${DB.settings.lockDays} days before the match.</div>`;
-    h+=`<div class="card" id="av-list-member">`;
-    pl.forEach(p=>{
-  const av=getAv(mid,p.id);
-  const me=p.id===SES.uid;
-  const ce=me&&!lk;
-  const vY=av==='yes'?'none':'yes';
-  const vM=av==='maybe'?'none':'maybe';
-  const vN=av==='no'?'none':'no';
-  // Build row with pure DOM - no template literals so values are always resolved
-  const row=document.createElement('div');
-  row.className='row';
-  if(!me) row.style.cssText='opacity:.3;pointer-events:none';
-  // Avatar
-  const avEl=document.createElement('div');
-  avEl.className='av';
-  if(me) avEl.style.cssText='background:#1a5c2e;color:#fff';
-  avEl.textContent=ini(p.name);
-  row.appendChild(avEl);
-  // Name
-  const nm=document.createElement('div');
-  nm.className='rname';nm.textContent=p.name;
-  row.appendChild(nm);
-  // Toggles or status tag
-  if(ce){
-    const grp=document.createElement('div');
-    grp.style.cssText='display:flex;gap:5px';
-    [['yes',vY,'ay'],['maybe',vM,'am'],['no',vN,'an']].forEach(([lbl,val,cls])=>{
-      const t=document.createElement('div');
-      t.className='tog'+(av===lbl?' '+cls:'');
-      t.textContent=lbl.charAt(0).toUpperCase()+lbl.slice(1);
-      t.dataset.mid=mid; t.dataset.uid=p.id; t.dataset.val=val;
-      t.onclick=function(){av_click(this);};
-      grp.appendChild(t);
-    });
-    row.appendChild(grp);
-  } else {
-    const tag=document.createElement('span');
-    const tagMap={yes:'tag-y',no:'tag-n',maybe:'tag-m',none:'tag-0'};
-    const lblMap={yes:'Available',no:'Unavailable',maybe:'Maybe',none:'Not set'};
-    tag.className='atag '+(tagMap[av]||'tag-0');
-    tag.textContent=lblMap[av]||'Not set';
-    row.appendChild(tag);
-  }
-  document.getElementById('av-list-member')?.appendChild(row);
-});
-    h+=`</div>`;
+    h+=`<div class="card" id="av-list-member"></div>`;
   }
   h+=`<div class="sec" style="margin-top:4px">My profile</div><div class="card"><label>Display name</label><div style="display:flex;gap:8px;margin-bottom:10px"><input id="f-nn" value="${SES.name||''}" style="margin:0;flex:1"><button class="btn sm primary" onclick="saveName()">Save</button></div><label>Change PIN</label><input id="f-cp0" type="password" placeholder="Current PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center"><input id="f-cp1" type="password" placeholder="New PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center"><input id="f-cp2" type="password" placeholder="Confirm new PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center"><button class="btn primary full" onclick="savePinChange()">Change PIN</button></div>`;
   h+=`<div class="sec" style="margin-top:4px">Notifications${ur>0?` <span style="font-size:13px;font-weight:400;color:#e24b4a">(${ur} new)</span>`:''}</div>`;
   if(!myN.length)h+=`<div style="color:#bbb;font-size:13px;text-align:center;padding:16px">No notifications yet.</div>`;
   else{h+=`<div class="card">`;myN.slice(0,10).forEach(n=>{const u=!n.read?.[SES.uid];h+=`<div class="notif-row"><div class="ndot${u?'':' read'}"></div><div style="flex:1;font-size:13px${u?';font-weight:600':''}">${n.text}</div><div style="font-size:11px;color:#bbb;white-space:nowrap">${ago(n.ts)}</div></div>`;});h+=`</div>`;}
   app.innerHTML=h;
+  // NOW build availability rows - container exists in DOM
+  if(m.id){
+    const listEl=document.getElementById('av-list-member');
+    if(listEl) pl.forEach(p=>{
+      const av=getAv(mid,p.id);
+      const me=p.id===SES.uid;
+      const ce=me&&!lk;
+      const vY=av==='yes'?'none':'yes';
+      const vM=av==='maybe'?'none':'maybe';
+      const vN=av==='no'?'none':'no';
+      const row=document.createElement('div');
+      row.className='row';
+      if(!me)row.style.cssText='opacity:.3;pointer-events:none';
+      const avEl=document.createElement('div');avEl.className='av';
+      if(me)avEl.style.cssText='background:#1a5c2e;color:#fff';
+      avEl.textContent=ini(p.name);row.appendChild(avEl);
+      const nm=document.createElement('div');nm.className='rname';nm.textContent=p.name;row.appendChild(nm);
+      if(ce){
+        const grp=document.createElement('div');grp.style.cssText='display:flex;gap:5px';
+        [['yes',vY,'ay'],['maybe',vM,'am'],['no',vN,'an']].forEach(([lbl,val,cls])=>{
+          const t=document.createElement('div');
+          t.className='tog'+(av===lbl?' '+cls:'');
+          t.textContent=lbl.charAt(0).toUpperCase()+lbl.slice(1);
+          t.dataset.mid=mid;t.dataset.uid=p.id;t.dataset.val=val;
+          t.onclick=function(){av_click(this);};
+          grp.appendChild(t);
+        });
+        row.appendChild(grp);
+      } else {
+        const tag=document.createElement('span');
+        tag.className='atag '+({yes:'tag-y',no:'tag-n',maybe:'tag-m',none:'tag-0'}[av]||'tag-0');
+        tag.textContent={yes:'Available',no:'Unavailable',maybe:'Maybe',none:'Not set'}[av]||'Not set';
+        row.appendChild(tag);
+      }
+      listEl.appendChild(row);
+    });
+  }
   setTimeout(()=>markRead(),1000);
 }
 
@@ -507,48 +499,7 @@ function rManager(app){
       h+=`<span class="pill ${m.venue==='Home'?'home':'away'}">vs ${m.opponent} · ${fmtD(m.date)}${m.time?' at '+m.time:''} · ${m.venue}</span>`;
       if(isLk(mid))h+=`<div class="banner-err">🔒 Locked for members. You can still override.</div>`;
       h+=`<div class="stats"><div class="stat"><div class="stat-n">${avc(mid,'yes')}</div><div class="stat-l">Available</div></div><div class="stat"><div class="stat-n">${avc(mid,'maybe')}</div><div class="stat-l">Maybe</div></div><div class="stat"><div class="stat-n">${avc(mid,'no')}</div><div class="stat-l">Unavailable</div></div><div class="stat"><div class="stat-n">${avc(mid,'none')}</div><div class="stat-l">No response</div></div></div>`;
-      h+=`<div class="card" id="av-list-mgr">`;
-      pl.forEach(p=>{
-  const av=getAv(mid,p.id);
-  const me=p.id===SES.uid;
-  const tc={yes:'tag-y',no:'tag-n',maybe:'tag-m',none:'tag-0'}[av];
-  const tl={yes:'Available',no:'Unavailable',maybe:'Maybe',none:'No response'}[av];
-  const vY=av==='yes'?'none':'yes';
-  const vM=av==='maybe'?'none':'maybe';
-  const vN=av==='no'?'none':'no';
-  const row=document.createElement('div');
-  row.className='row';
-  // Avatar
-  const avEl=document.createElement('div');
-  avEl.className='av';
-  if(me) avEl.style.cssText='background:#1a5c2e;color:#fff';
-  avEl.textContent=ini(p.name);
-  row.appendChild(avEl);
-  // Name + symbols
-  const nm=document.createElement('div');
-  nm.className='rname';nm.innerHTML=p.name+syms(p,true);
-  row.appendChild(nm);
-  // Status tag
-  const tag=document.createElement('span');
-  tag.className='atag '+tc;tag.style.marginRight='6px';tag.textContent=tl;
-  row.appendChild(tag);
-  // Toggles
-  if(!isRO){
-    const grp=document.createElement('div');
-    grp.style.cssText='display:flex;gap:3px';
-    [['Y','yes',vY,'ay'],['M','maybe',vM,'am'],['N','no',vN,'an']].forEach(([lbl,key,val,cls])=>{
-      const t=document.createElement('div');
-      t.className='tog'+(av===key?' '+cls:'');
-      t.textContent=lbl;
-      t.dataset.mid=mid; t.dataset.uid=p.id; t.dataset.val=val;
-      t.onclick=function(){av_click(this);};
-      grp.appendChild(t);
-    });
-    row.appendChild(grp);
-  }
-  document.getElementById('av-list-mgr')?.appendChild(row);
-});
-      h+=`</div>`;
+      h+=`<div class="card" id="av-list-mgr"></div>`;
     }
   }
   else if(UI.tab===1){
@@ -595,6 +546,31 @@ function rManager(app){
     h+=`<div class="sec">Settings</div><div class="sub">Changes apply to all users immediately.</div><div class="card"><div class="set-row"><div><div class="set-lbl">Availability reminder</div><div class="set-sub">Push X days before match if no response</div></div><div style="display:flex;align-items:center;gap:6px"><input class="num-inp" type="number" id="s-r" min="1" max="14" value="${DB.settings.reminderDays}"><span style="font-size:13px;color:#888">days</span></div></div><div class="set-row"><div><div class="set-lbl">Availability lock</div><div class="set-sub">Members locked X days before match</div></div><div style="display:flex;align-items:center;gap:6px"><input class="num-inp" type="number" id="s-l" min="1" max="10" value="${DB.settings.lockDays}"><span style="font-size:13px;color:#888">days</span></div></div><div class="set-row"><div><div class="set-lbl">Reminder time</div><div class="set-sub">Time of day the push fires</div></div><input type="time" id="s-t" value="${DB.settings.reminderTime}" style="width:100px;margin:0"></div><button class="btn primary full" style="margin-top:14px" onclick="saveSet()">Save settings</button></div>`;
   }
   app.innerHTML=h;
+  // Build availability list after DOM exists
+  if(UI.tab===0&&m.id){
+    const listEl=document.getElementById('av-list-mgr');
+    if(listEl) pl.forEach(p=>{
+      const av=getAv(mid,p.id);
+      const me=p.id===SES.uid;
+      const tc={yes:'tag-y',no:'tag-n',maybe:'tag-m',none:'tag-0'}[av];
+      const tl={yes:'Available',no:'Unavailable',maybe:'Maybe',none:'No response'}[av];
+      const vY=av==='yes'?'none':'yes';const vM=av==='maybe'?'none':'maybe';const vN=av==='no'?'none':'no';
+      const row=document.createElement('div');row.className='row';
+      const avEl=document.createElement('div');avEl.className='av';
+      if(me)avEl.style.cssText='background:#1a5c2e;color:#fff';
+      avEl.textContent=ini(p.name);row.appendChild(avEl);
+      const nm=document.createElement('div');nm.className='rname';nm.innerHTML=p.name+syms(p,true);row.appendChild(nm);
+      const tag=document.createElement('span');tag.className='atag '+tc;tag.style.marginRight='6px';tag.textContent=tl;row.appendChild(tag);
+      if(!isRO){
+        const grp=document.createElement('div');grp.style.cssText='display:flex;gap:3px';
+        [['Y','yes',vY,'ay'],['M','maybe',vM,'am'],['N','no',vN,'an']].forEach(([lbl,key,val,cls])=>{
+          const t=document.createElement('div');t.className='tog'+(av===key?' '+cls:'');t.textContent=lbl;
+          t.dataset.mid=mid;t.dataset.uid=p.id;t.dataset.val=val;t.onclick=function(){av_click(this);};grp.appendChild(t);
+        });row.appendChild(grp);
+      }
+      listEl.appendChild(row);
+    });
+  }
 }
 
 // Firebase loader
