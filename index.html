@@ -227,30 +227,41 @@ function markRead(){if(!SES.uid)return;const k=SES.role==='member'?SES.uid:'mana
 function doLogin(){
   const name=(document.getElementById('f-name')?.value||'').trim().toLowerCase().replace(/\s+/g,' ');
   const pin=(document.getElementById('f-pin')?.value||'').trim();
-  const err=document.getElementById('f-err');
-  if(err)err.style.display='none';
-  if(!name||!pin){if(err){err.textContent='Enter your name and PIN.';err.style.display='block';}return;}
-  const all=Object.values(DB.users).length?Object.values(DB.users):SEEDS;
-  const user=all.find(u=>u.name.toLowerCase()===name&&u.status==='active');
-  if(!user){if(err){err.textContent='Name not recognised.';err.style.display='block';}return;}
-  if(user.pin!==h(pin)){if(err){err.textContent='Incorrect PIN.';err.style.display='block';}return;}
-  saveSes(user);
-  if(user.mustChange){UI.screen='changePin';render();return;}
-  UI.screen=(user.role==='manager'||user.role==='readonly')?'manager':'member';
-  render();
+  _loginErr='';
+  if(!name||!pin){_loginErr='Enter your name and PIN.';rLogin(document.getElementById('app'));return;}
+  // Always fetch fresh user data from Firebase at login - never trust cached DB.users
+  // This ensures PIN changes are always reflected correctly
+  const tryLogin = (users) => {
+    const user=users.find(u=>u.name.toLowerCase()===name&&u.status==='active');
+    if(!user){_loginErr='Name not recognised. Try again or register below.';rLogin(document.getElementById('app'));return;}
+    if(user.pin!==h(pin)){_loginErr='Incorrect PIN.';rLogin(document.getElementById('app'));return;}
+    _loginErr='';
+    saveSes(user);
+    if(user.mustChange){UI.screen='changePin';render();return;}
+    UI.screen=(user.role==='manager'||user.role==='readonly')?'manager':'member';
+    render();
+  };
+  if(window._firebaseReady){
+    fbGet('sandhurst/users').then(snap=>{
+      const users=snap.val()?Object.values(snap.val()):SEEDS;
+      tryLogin(users);
+    }).catch(()=>tryLogin(Object.values(DB.users).length?Object.values(DB.users):SEEDS));
+  } else {
+    tryLogin(Object.values(DB.users).length?Object.values(DB.users):SEEDS);
+  }
 }
 function doChangePin(){
   const np=(document.getElementById('f-newpin')?.value||'').trim();
   const conf=(document.getElementById('f-confpin')?.value||'').trim();
-  const err=document.getElementById('f-err');
-  if(err)err.style.display='none';
-  if(np.length<4){if(err){err.textContent='PIN must be at least 4 digits.';err.style.display='block';}return;}
-  if(np!==conf){if(err){err.textContent='PINs do not match.';err.style.display='block';}return;}
-  if(np==='1000'){if(err){err.textContent='Choose a different PIN.';err.style.display='block';}return;}
+  _loginErr='';
+  if(np.length<4){_loginErr='PIN must be at least 4 digits.';rChangePin(document.getElementById('app'));return;}
+  if(np!==conf){_loginErr='PINs do not match.';rChangePin(document.getElementById('app'));return;}
+  if(np==='1000'){_loginErr='Choose a different PIN.';rChangePin(document.getElementById('app'));return;}
   const hp=h(np);
   updPin(hp);
   fbSet(`sandhurst/users/${SES.uid}/pin`,hp);
   fbSet(`sandhurst/users/${SES.uid}/mustChange`,false);
+  _loginErr='';
   UI.screen=(SES.role==='manager'||SES.role==='readonly')?'manager':'member';
   toast('PIN set — welcome, '+(SES.name?.split(' ')[0]||'')+'!');
   render();
@@ -272,8 +283,10 @@ function doRegister(){
   addNotif(`New player registered: ${name}`,'manager',null,'registration');
   UI.screen='pending';render();
 }
-function doLogout(){clearSes();UI.screen='login';UI.tab=0;render();}
+function doLogout(){clearSes();_loginErr='';UI.screen='login';UI.tab=0;render();}
 
+// Login error state - separate from Firebase-driven state
+let _loginErr='';
 // Local edit tracker - prevents Firebase from overwriting changes mid-flight
 const _localEdits={avail:{},squad:{}};
 
@@ -376,6 +389,12 @@ function refreshAvailSquad(){
 function mTabs(){const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));if(!ml.length)return'<div style="color:#bbb;font-size:13px;margin-bottom:14px">No matches yet.</div>';return`<div class="tabs">${ml.map(m=>{const c=m.venue==='Home'?'home':'away';const s=UI.mid===m.id?'sel':'';const d=daysTo(m.id);const lk=isLk(m.id);return`<button class="tab ${c} ${s}" onclick="UI.mid='${m.id}';refreshAvailSquad();render()"><div style="font-weight:600;font-size:13px">${m.opponent}</div><div style="font-size:11px;opacity:.75;margin-top:2px">${fmtD(m.date)}${m.time?' '+m.time:''}</div>${lk?`<div style="font-size:10px;color:#a32d2d;margin-top:1px">🔒 Locked</div>`:d>0&&d<=DB.settings.reminderDays?`<div style="font-size:10px;color:#854f0b">${d}d</div>`:''}</button>`;}).join('')}</div>`;}
 
 function rLogin(app){
+  // If form already on screen, never rebuild - just show/hide error
+  if(document.getElementById('f-name')){
+    const e=document.getElementById('f-err');
+    if(e){e.style.display=_loginErr?'block':'none';if(_loginErr)e.textContent=_loginErr;}
+    return;
+  }
   app.innerHTML=`<div class="login-wrap"><img src="${LOGO}" class="login-logo"><div class="login-title">Sandhurst CC</div><div class="login-sub">Sign in to continue</div><div class="login-card"><label>Your name</label><input id="f-name" type="text" placeholder="e.g. Joe Root" autocomplete="name" autocorrect="off" autocapitalize="words" spellcheck="false"><label>PIN</label><input id="f-pin" type="password" placeholder="Enter PIN" inputmode="numeric" style="letter-spacing:4px;font-size:18px;text-align:center"><div id="f-err" class="err" style="display:none"></div><button class="btn primary full" onclick="doLogin()">Sign in</button><div class="divider">or</div><button class="btn full" style="background:#f4f4f2;border-color:#e0e0e0;color:#555" onclick="UI.screen='register';render()">New player? Register here</button><div class="hint">First time? Use PIN: 1000</div></div></div>`;
   const n=document.getElementById('f-name'),p=document.getElementById('f-pin');
   n?.addEventListener('keydown',e=>e.key==='Enter'&&p?.focus());
@@ -384,7 +403,12 @@ function rLogin(app){
 }
 
 function rChangePin(app){
-  app.innerHTML=`<div class="login-wrap"><img src="${LOGO}" class="login-logo"><div class="login-title">Set your PIN</div><div class="login-sub">Welcome ${SES.name?.split(' ')[0]||''}! Choose a personal PIN.</div><div class="login-card"><label>New PIN (4+ digits)</label><input id="f-newpin" type="password" placeholder="New PIN" inputmode="numeric" autocomplete="new-password" style="letter-spacing:4px;font-size:18px;text-align:center"><label>Confirm PIN</label><input id="f-confpin" type="password" placeholder="Confirm PIN" inputmode="numeric" autocomplete="new-password" style="letter-spacing:4px;font-size:18px;text-align:center"><div id="f-err" class="err" style="display:none"></div><button class="btn primary full" onclick="doChangePin()">Set PIN &amp; continue</button></div></div>`;
+  if(document.getElementById('f-newpin')){
+    const e=document.getElementById('f-err');
+    if(e){e.style.display=_loginErr?'block':'none';if(_loginErr)e.textContent=_loginErr;}
+    return;
+  }
+  app.innerHTML=app.innerHTML=`<div class="login-wrap"><img src="${LOGO}" class="login-logo"><div class="login-title">Set your PIN</div><div class="login-sub">Welcome ${SES.name?.split(' ')[0]||''}! Choose a personal PIN.</div><div class="login-card"><label>New PIN (4+ digits)</label><input id="f-newpin" type="password" placeholder="New PIN" inputmode="numeric" autocomplete="new-password" style="letter-spacing:4px;font-size:18px;text-align:center"><label>Confirm PIN</label><input id="f-confpin" type="password" placeholder="Confirm PIN" inputmode="numeric" autocomplete="new-password" style="letter-spacing:4px;font-size:18px;text-align:center"><div id="f-err" class="err" style="display:none"></div><button class="btn primary full" onclick="doChangePin()">Set PIN &amp; continue</button></div></div>`;
   document.getElementById('f-confpin')?.addEventListener('keydown',e=>e.key==='Enter'&&doChangePin());
 }
 
