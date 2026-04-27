@@ -275,6 +275,9 @@ function initFirebase() {
       const fresh = S.users[S.currentUser.id];
       if (fresh) S.currentUser = fresh;
     }
+    // Never re-render screens where user is actively typing - just update data silently
+    const typingScreens = ['login', 'changePin', 'register'];
+    if (typingScreens.includes(S.screen)) return;
     S.unreadNotifs = S.notifications.filter(n=>{
       if (!S.currentUser) return false;
       const key = S.currentUser.role==='member'?S.currentUser.id:'manager';
@@ -311,8 +314,8 @@ async function releaseLock(){if(iAmLock())await fbSet('sandhurst/lock',null);}
 window.setScreen = s => { S.screen=s; S.pinInput=''; S.newPin=''; S.confirmPin=''; S.pinError=''; S.pinStep=0; render(); };
 
 window.doLogin = function() {
-  const name = S.nameInput.trim().toLowerCase();
-  const pin  = S.pinInput.trim();
+  const name = (document.getElementById('name-inp')?.value || S.nameInput).trim().toLowerCase();
+  const pin  = (document.getElementById('pin-inp')?.value || S.pinInput).trim();
   if (!name||!pin) { S.pinError='Enter your name and PIN.'; render(); return; }
   // Find user by name (case-insensitive)
   const user = Object.values(S.users).find(u => u.name.toLowerCase()===name && u.status==='active');
@@ -351,9 +354,9 @@ window.doChangePin = async function() {
 };
 
 window.doRegister = async function() {
-  const name = S.nameInput.trim();
-  const pin  = S.newPin.trim();
-  const conf = S.confirmPin.trim();
+  const name = (document.getElementById('reg-name')?.value || '').trim();
+  const pin  = (document.getElementById('reg-pin')?.value || '').trim();
+  const conf = (document.getElementById('reg-conf')?.value || '').trim();
   if (!name||name.length<2) { S.pinError='Enter your full name.'; render(); return; }
   if (pin.length<4) { S.pinError='PIN must be at least 4 digits.'; render(); return; }
   if (pin!==conf) { S.pinError='PINs do not match.'; render(); return; }
@@ -627,10 +630,11 @@ function renderLogin(app) {
     <div class="login-card">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Your name</label>
       <input id="name-inp" type="text" placeholder="e.g. Joe Root" autocomplete="name"
-        value="${S.nameInput}" oninput="S.nameInput=this.value" onkeydown="if(event.key==='Enter')document.getElementById('pin-inp').focus()">
+        autocorrect="off" autocapitalize="words" spellcheck="false"
+        onkeydown="if(event.key==='Enter')document.getElementById('pin-inp').focus()">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">PIN</label>
       <input id="pin-inp" type="password" placeholder="Enter PIN" inputmode="numeric"
-        value="${S.pinInput}" oninput="S.pinInput=this.value" onkeydown="if(event.key==='Enter')doLogin()"
+        onkeydown="if(event.key==='Enter')doLogin()"
         style="letter-spacing:4px;font-size:18px;text-align:center">
       ${S.pinError?`<div class="error">${S.pinError}</div>`:''}
       <button class="btn primary" onclick="doLogin()">Sign in</button>
@@ -672,14 +676,13 @@ function renderRegister(app) {
     <div class="login-card">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Your full name</label>
       <input id="reg-name" type="text" placeholder="First and last name" autocomplete="name"
-        value="${S.nameInput}" oninput="S.nameInput=this.value">
+        autocorrect="off" autocapitalize="words" spellcheck="false">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Choose a PIN (4+ digits)</label>
-      <input type="password" placeholder="PIN" inputmode="numeric"
-        value="${S.newPin}" oninput="S.newPin=this.value"
-        style="letter-spacing:4px;font-size:18px;text-align:center">
+      <input id="reg-pin" type="password" placeholder="PIN" inputmode="numeric"
+        autocomplete="new-password" style="letter-spacing:4px;font-size:18px;text-align:center">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Confirm PIN</label>
-      <input type="password" placeholder="Confirm PIN" inputmode="numeric"
-        value="${S.confirmPin}" oninput="S.confirmPin=this.value" onkeydown="if(event.key==='Enter')doRegister()"
+      <input id="reg-conf" type="password" placeholder="Confirm PIN" inputmode="numeric"
+        autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()"
         style="letter-spacing:4px;font-size:18px;text-align:center">
       ${S.pinError?`<div class="error">${S.pinError}</div>`:''}
       <button class="btn primary" onclick="doRegister()">Request access</button>
