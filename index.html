@@ -239,28 +239,27 @@ window.showBanner = function(title, body) {
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
 function initFirebase() {
-  if (!window._firebaseReady) { document.addEventListener('firebase-ready',initFirebase,{once:true}); return; }
-  // Seed users if database is empty
-  window._get(window._ref(window._db,'sandhurst/users')).then(snap => {
-    if (!snap.val()) {
+  if (!window._firebaseReady) {
+    document.addEventListener('firebase-ready',initFirebase,{once:true});
+    // Timeout fallback in case firebase-ready never fires
+    setTimeout(() => { if(S.screen==='login'&&!S.syncLive) initFirebase(); }, 5000);
+    return;
+  }
+  // Live listener
+  window._onValue(window._ref(window._db,'sandhurst'), snap => {
+    const data = snap.val()||{};
+    // Seed default data if database is empty (non-blocking)
+    if (!data.users) {
       const usersObj = {};
       SEED_USERS.forEach(u => { usersObj[u.id] = u; });
       window._set(window._ref(window._db,'sandhurst/users'), usersObj);
     }
-  });
-  window._get(window._ref(window._db,'sandhurst/matches')).then(snap => {
-    if (!snap.val()) {
+    if (!data.matches) {
       const mObj = {};
       DEFAULT_MATCHES.forEach(m => { mObj[m.id]=m; });
       window._set(window._ref(window._db,'sandhurst/matches'), mObj);
     }
-  });
-  window._get(window._ref(window._db,'sandhurst/settings')).then(snap => {
-    if (!snap.val()) window._set(window._ref(window._db,'sandhurst/settings'), DEFAULT_SETTINGS);
-  });
-  // Live listener
-  window._onValue(window._ref(window._db,'sandhurst'), snap => {
-    const data = snap.val()||{};
+    if (!data.settings) window._set(window._ref(window._db,'sandhurst/settings'), DEFAULT_SETTINGS);
     if (data.users)        S.users        = data.users;
     if (data.matches)      S.matches      = data.matches;
     if (data.settings)     S.settings     = {...DEFAULT_SETTINGS,...data.settings};
