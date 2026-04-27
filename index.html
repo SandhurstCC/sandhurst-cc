@@ -284,8 +284,8 @@ function initFirebase() {
     // Refresh currentUser - restore pin from sessionStorage, never from Firebase
     if (S.currentUser) {
       const fresh = S.users[S.currentUser.id];
-      const savedPin = (()=>{ try { return sessionStorage.getItem('scc_pin'); } catch(e){ return null; } })();
-      const savedMc  = (()=>{ try { return sessionStorage.getItem('scc_mc'); } catch(e){ return null; } })();
+      const savedPin = (()=>{ try { return localStorage.getItem('scc_pin'); } catch(e){ return null; } })();
+      const savedMc  = (()=>{ try { return localStorage.getItem('scc_mc'); } catch(e){ return null; } })();
       if (fresh) {
         S.currentUser = {
           ...fresh,
@@ -334,20 +334,20 @@ async function acquireLock(){const now=Date.now();if(!S.lockHolder||now>(S.lockE
 async function releaseLock(){if(iAmLock())await fbSet('sandhurst/lock',null);}
 
 // ── AUTH ──────────────────────────────────────────────────────────────────────
-window.setScreen = s => { S.screen=s; S.pinInput=''; S.newPin=''; S.confirmPin=''; S.pinError=''; S.pinStep=0; render(); };
+window.setScreen = s => { S.screen=s; S.pinInput=''; S.newPin=''; S.confirmPin=''; S.pinError=''; S.pinStep=0; render(true); };
 
 window.doLogin = function() {
   const name = (document.getElementById('name-inp')?.value || S.nameInput).trim().toLowerCase();
   const pin  = (document.getElementById('pin-inp')?.value || S.pinInput).trim();
-  if (!name||!pin) { S.pinError='Enter your name and PIN.'; render(); return; }
+  if (!name||!pin) { S.pinError='Enter your name and PIN.'; render(true); return; }
   // Find user by name (case-insensitive)
   const user = Object.values(S.users).find(u => u.name.toLowerCase()===name && u.status==='active')
     || Object.values(S.users).find(u => u.name.toLowerCase().replace(/\s+/g,'')=== name.replace(/\s+/g,'') && u.status==='active');
-  if (!user) { S.pinError='Name not recognised. Check spelling or register below.'; render(); return; }
-  if (user.pin !== hashPin(pin)) { S.pinError='Incorrect PIN.'; render(); return; }
+  if (!user) { S.pinError='Name not recognised. Check spelling or register below.'; render(true); return; }
+  if (user.pin !== hashPin(pin)) { S.pinError='Incorrect PIN.'; render(true); return; }
   S.currentUser = {...user};
   // Save session PIN to sessionStorage so Firebase refreshes can't overwrite it
-  try { sessionStorage.setItem('scc_pin', user.pin); sessionStorage.setItem('scc_uid', user.id); sessionStorage.setItem('scc_mc', user.mustChange?'1':'0'); } catch(e){}
+  try { localStorage.setItem('scc_pin', user.pin); localStorage.setItem('scc_uid', user.id); localStorage.setItem('scc_mc', user.mustChange?'1':'0'); } catch(e){}
   S.pinError = '';
   S.nameInput = ''; S.pinInput = '';
   if (user.mustChange) { S.screen='changePin'; S.newPin=''; S.confirmPin=''; S.pinError=''; render(); return; }
@@ -371,7 +371,7 @@ window.doChangePin = async function() {
   // Update local state immediately so Firebase re-renders don't break anything
   S.currentUser = {...S.currentUser, pin:hashed, mustChange:false};
   // Update sessionStorage with new PIN
-  try { sessionStorage.setItem('scc_pin', hashed); sessionStorage.setItem('scc_mc', '0'); } catch(e){}
+  try { localStorage.setItem('scc_pin', hashed); localStorage.setItem('scc_mc', '0'); } catch(e){}
   S.pinError='';
   S.screen = (role==='manager'||role==='readonly') ? 'manager' : 'member';
   render();
@@ -402,9 +402,9 @@ window.doRegister = async function() {
 
 window.doLogout = async function() {
   await releaseLock();
-  try { sessionStorage.removeItem('scc_pin'); sessionStorage.removeItem('scc_uid'); sessionStorage.removeItem('scc_mc'); } catch(e){}
+  try { localStorage.removeItem('scc_pin'); localStorage.removeItem('scc_uid'); localStorage.removeItem('scc_mc'); } catch(e){}
   S.screen='login'; S.currentUser=null; S.nameInput=''; S.pinInput='';
-  S.newPin=''; S.confirmPin=''; S.pinError=''; render();
+  S.newPin=''; S.confirmPin=''; S.pinError=''; render(true);
 };
 
 // ── PROFILE (change name / PIN) ───────────────────────────────────────────────
@@ -463,10 +463,22 @@ window.setAvailFn = function(mid, uid, val) {
 // ── SQUAD ─────────────────────────────────────────────────────────────────────
 window.toggleSquadFn = async function(mid,uid) {
   if (S.currentUser?.role!=='manager') return;
-  if (!iAmLock()){const ok=await acquireLock();if(!ok){alert(`Another manager is editing.`);return;}}
+  // Acquire lock if needed - use name as fallback identifier
+  if (!iAmLock()) {
+    const lockFree = !S.lockHolder || Date.now() > (S.lockExpiry||0);
+    const iMineByName = S.lockHolder && S.users[S.lockHolder]?.name?.toLowerCase()===S.currentUser.name?.toLowerCase();
+    if (!lockFree && !iMineByName) { alert('Another manager is currently editing.'); return; }
+    await fbSet('sandhurst/lock',{holder:S.currentUser.id, expiry:Date.now()+300000});
+  }
+  // Update local state immediately for snappy UI
   let sq=[...getSquad(mid)]; const idx=sq.indexOf(uid);
-  if(idx>-1)sq.splice(idx,1); else{if(sq.length>=11)return;sq.push(uid);}
-  await fbSet(`sandhurst/squad/${mid}`,sq);
+  if(idx>-1) sq.splice(idx,1);
+  else { if(sq.length>=11)return; sq.push(uid); }
+  if(!S.squad[mid]) S.squad[mid]=[];
+  S.squad[mid]=sq;
+  render();
+  // Write to Firebase in background
+  fbSet(`sandhurst/squad/${mid}`,sq);
 };
 
 // ── DRAG DESKTOP ──────────────────────────────────────────────────────────────
@@ -619,57 +631,32 @@ window.doPDF = function(mid) {
 };
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
-function render() {
+function render(force) {
   const app=document.getElementById('app');
-  // For typing screens, only update the error message in-place — never wipe the whole screen
-  if (S.screen==='login') {
-    const existing = document.getElementById('login-form');
-    if (existing) {
-      // Just update error message without re-rendering the whole form
+  // For typing screens already on screen, only update error in-place (not on forced renders)
+  if (!force) {
+    if (S.screen==='login' && document.getElementById('login-form')) {
       let errEl = document.getElementById('login-error');
       if (S.pinError) {
-        if (!errEl) {
-          errEl = document.createElement('div');
-          errEl.id = 'login-error';
-          errEl.className = 'error';
-          document.getElementById('pin-inp')?.before(errEl);
-        }
+        if (!errEl) { errEl=document.createElement('div'); errEl.id='login-error'; errEl.className='error'; document.getElementById('pin-inp')?.before(errEl); }
         errEl.textContent = S.pinError;
-      } else if (errEl) {
-        errEl.remove();
-      }
+      } else if (errEl) errEl.remove();
       return;
     }
-  }
-  if (S.screen==='changePin') {
-    const existing = document.getElementById('changepin-form');
-    if (existing) {
+    if (S.screen==='changePin' && document.getElementById('changepin-form')) {
       let errEl = document.getElementById('changepin-error');
       if (S.pinError) {
-        if (!errEl) {
-          errEl = document.createElement('div');
-          errEl.id = 'changepin-error';
-          errEl.className = 'error';
-          document.getElementById('change-pin-conf')?.after(errEl);
-        }
+        if (!errEl) { errEl=document.createElement('div'); errEl.id='changepin-error'; errEl.className='error'; document.getElementById('change-pin-conf')?.after(errEl); }
         errEl.textContent = S.pinError;
-      } else if (errEl) { errEl.remove(); }
+      } else if (errEl) errEl.remove();
       return;
     }
-  }
-  if (S.screen==='register') {
-    const existing = document.getElementById('register-form');
-    if (existing) {
+    if (S.screen==='register' && document.getElementById('register-form')) {
       let errEl = document.getElementById('register-error');
       if (S.pinError) {
-        if (!errEl) {
-          errEl = document.createElement('div');
-          errEl.id = 'register-error';
-          errEl.className = 'error';
-          document.getElementById('reg-conf')?.after(errEl);
-        }
+        if (!errEl) { errEl=document.createElement('div'); errEl.id='register-error'; errEl.className='error'; document.getElementById('reg-conf')?.after(errEl); }
         errEl.textContent = S.pinError;
-      } else if (errEl) { errEl.remove(); }
+      } else if (errEl) errEl.remove();
       return;
     }
   }
