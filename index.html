@@ -276,11 +276,6 @@ function initFirebase() {
       const fresh = S.users[S.currentUser.id];
       if (fresh) S.currentUser = fresh;
     }
-    // Don't re-render screens where user is actively typing
-    if (S.screen==='changePin' || S.screen==='register') {
-      // Just update data silently, don't re-render
-      return;
-    }
     S.unreadNotifs = S.notifications.filter(n=>{
       if (!S.currentUser) return false;
       const key = S.currentUser.role==='member'?S.currentUser.id:'manager';
@@ -339,14 +334,21 @@ window.doChangePin = async function() {
   if (np.length < 4) { S.pinError='PIN must be at least 4 digits.'; render(); return; }
   if (np !== conf) { S.pinError='PINs do not match.'; render(); return; }
   if (np==='1000') { S.pinError='Please choose a different PIN.'; render(); return; }
-  if (!S.currentUser?.id) { S.pinError='Session error — please log in again.'; S.screen='login'; render(); return; }
-  await fbSet(`sandhurst/users/${S.currentUser.id}/pin`, hashPin(np));
-  await fbSet(`sandhurst/users/${S.currentUser.id}/mustChange`, false);
-  S.currentUser = {...S.currentUser, pin:hashPin(np), mustChange:false};
+  // Capture everything we need before any async operations
+  const uid  = S.currentUser?.id;
+  const role = S.currentUser?.role;
+  const name = S.currentUser?.name;
+  if (!uid) { S.screen='login'; S.pinError=''; render(); return; }
+  const hashed = hashPin(np);
+  // Update local state immediately so Firebase re-renders don't break anything
+  S.currentUser = {...S.currentUser, pin:hashed, mustChange:false};
   S.pinError='';
-  S.screen = (S.currentUser.role==='manager'||S.currentUser.role==='readonly') ? 'manager' : 'member';
-  showBanner('PIN updated successfully');
+  S.screen = (role==='manager'||role==='readonly') ? 'manager' : 'member';
   render();
+  showBanner('PIN set — welcome, ' + (name?.split(' ')[0]||'')+'!');
+  // Save to Firebase in background
+  fbSet(`sandhurst/users/${uid}/pin`, hashed);
+  fbSet(`sandhurst/users/${uid}/mustChange`, false);
 };
 
 window.doRegister = async function() {
@@ -645,10 +647,11 @@ function renderChangePin(app) {
     <div class="login-card">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">New PIN (4+ digits)</label>
       <input id="change-pin-new" type="password" placeholder="New PIN" inputmode="numeric"
+        autocomplete="new-password"
         style="letter-spacing:4px;font-size:18px;text-align:center;margin-bottom:10px">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Confirm PIN</label>
       <input id="change-pin-conf" type="password" placeholder="Confirm PIN" inputmode="numeric"
-        onkeydown="if(event.key==='Enter')doChangePin()"
+        autocomplete="new-password" onkeydown="if(event.key==='Enter')doChangePin()"
         style="letter-spacing:4px;font-size:18px;text-align:center">
       ${S.pinError?`<div class="error">${S.pinError}</div>`:''}
       <button class="btn primary" onclick="doChangePin()">Set PIN &amp; continue</button>
