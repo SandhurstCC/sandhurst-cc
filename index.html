@@ -409,9 +409,14 @@ window.setAvailFn = async function(mid, uid, val) {
   if (S.currentUser.role==='member' && isLocked(mid)) return;
   if (getAvail(mid,uid)===val) return;
   await fbSet(`sandhurst/availability/${mid}/${uid}`, val);
-  const player=S.users[uid]; const match=getMatch(mid);
-  const labels={yes:'Available',no:'Unavailable',maybe:'Maybe'};
-  await addNotif(`${player?.name} marked ${labels[val]} for vs ${match?.opponent} (${fmtDate(match?.date)})`,'manager',mid,'availability');
+  // Only notify manager if it wasn't the manager marking their own row
+  const isSelf = S.currentUser.id === uid;
+  const isManager = S.currentUser.role==='manager';
+  if (!isSelf || !isManager) {
+    const player=S.users[uid]; const match=getMatch(mid);
+    const labels={yes:'Available',no:'Unavailable',maybe:'Maybe'};
+    await addNotif(`${player?.name} marked ${labels[val]} for vs ${match?.opponent} (${fmtDate(match?.date)})`,'manager',mid,'availability');
+  }
 };
 
 // ── SQUAD ─────────────────────────────────────────────────────────────────────
@@ -798,15 +803,15 @@ function renderManager(app) {
         const av=getAvail(mid,p.id);
         const tCls={yes:'tag-yes',no:'tag-no',maybe:'tag-maybe',none:'tag-none'}[av];
         const tLbl={yes:'Available',no:'Unavailable',maybe:'Maybe',none:'No response'}[av];
-        h+=`<div class="avail-row">
-          <div class="avatar">${ini(p.name)}</div>
-          <div class="pname">${p.name}${syms(p,true)}</div>
-          <span class="avail-tag ${tCls}" style="margin-right:6px">${tLbl}</span>
-          ${!isRO?`<div style="display:flex;gap:3px">
-            <div class="tog${av==='yes'?' ay':''}" onclick="setAvailFn('${mid}','${p.id}','yes')">Y</div>
-            <div class="tog${av==='maybe'?' am':''}" onclick="setAvailFn('${mid}','${p.id}','maybe')">M</div>
-            <div class="tog${av==='no'?' an':''}" onclick="setAvailFn('${mid}','${p.id}','no')">N</div>
-          </div>`:''}
+        const isMe = p.id===S.currentUser?.id;
+        h+=`<div class="avail-row" style="${isMe?'background:#f4f9f4;margin:0 -16px;padding:10px 16px;border-radius:8px':''}">
+          <div class="avatar" style="${isMe?'background:#1a5c2e;color:#fff':''}">${ini(p.name)}</div>
+          <div class="pname">${p.name}${syms(p,true)}${isMe?'<span style="font-size:11px;color:#1a5c2e;margin-left:4px">(me)</span>':''}</div>
+          ${!isRO?`<div style="display:flex;gap:${isMe?'5':'3'}px">
+            <div class="tog${av==='yes'?' ay':''}" style="${isMe?'padding:5px 10px':''}" onclick="setAvailFn('${mid}','${p.id}','yes')">${isMe?'Yes':'Y'}</div>
+            <div class="tog${av==='maybe'?' am':''}" style="${isMe?'padding:5px 10px':''}" onclick="setAvailFn('${mid}','${p.id}','maybe')">${isMe?'Maybe':'M'}</div>
+            <div class="tog${av==='no'?' an':''}" style="${isMe?'padding:5px 10px':''}" onclick="setAvailFn('${mid}','${p.id}','no')">${isMe?'No':'N'}</div>
+          </div>`:\`<span class="avail-tag ${tCls}">${tLbl}</span>\`}
         </div>`;
       });
       h+=`</div>`;
