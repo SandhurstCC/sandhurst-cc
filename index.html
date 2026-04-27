@@ -192,17 +192,22 @@ function initFB(){
   fbGet('sandhurst/users').then(s=>{if(!s.val()){const o={};SEEDS.forEach(u=>{o[u.id]=u;});fbSet('sandhurst/users',o);}});
   fbGet('sandhurst/matches').then(s=>{if(!s.val()){const o={};SEED_MATCHES.forEach(m=>{o[m.id]=m;});fbSet('sandhurst/matches',o);}});
   fbGet('sandhurst/settings').then(s=>{if(!s.val())fbSet('sandhurst/settings',DEF_SET);});
+  let _skipRender = false;
   window._onValue(window._ref(window._db,'sandhurst'),snap=>{
     const d=snap.val()||{};
     DB.users=d.users||{};
     DB.matches=d.matches||{};
     DB.settings={...DEF_SET,...(d.settings||{})};
-    DB.availability=d.availability||{};
-    DB.squad=d.squad||{};
+    // Only update availability/squad from Firebase if we don't have a pending local write
+    if(!_pendingAvail) DB.availability=d.availability||{};
+    if(!_pendingSquad) DB.squad=d.squad||{};
     DB.notifications=d.notifications?Object.values(d.notifications).sort((a,b)=>b.ts-a.ts):[];
     DB.lock=d.lock||null;
     DB.live=true;
     if(!DB.matches[UI.mid])UI.mid=Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;
+    // Never re-render login screens - they handle themselves
+    const noRender=['login','changePin','register','pending'];
+    if(noRender.includes(UI.screen))return;
     render();
   });
 }
@@ -260,17 +265,21 @@ function doRegister(){
 }
 function doLogout(){clearSes();UI.screen='login';UI.tab=0;render();}
 
+// Pending write flags
+let _pendingAvail=false,_pendingSquad=false;
+
 // Availability
 function setAv(mid,uid,val){
   if(!SES.uid)return;
   if(SES.role==='readonly')return;
   if(SES.role==='member'&&SES.uid!==uid)return;
   if(SES.role==='member'&&isLk(mid))return;
-  if(getAv(mid,uid)===val)return;
   if(!DB.availability[mid])DB.availability[mid]={};
   DB.availability[mid][uid]=val;
+  _pendingAvail=true;
   render();
   fbSet(`sandhurst/availability/${mid}/${uid}`,val);
+  setTimeout(()=>{_pendingAvail=false;},3000);
   if(SES.uid!==uid||SES.role!=='manager'){
     const p=DB.users[uid]||SEEDS.find(u=>u.id===uid);
     const m=getM(mid);
@@ -286,7 +295,11 @@ function togSq(mid,uid){
   const i=sq.indexOf(uid);
   if(i>-1)sq.splice(i,1);
   else{if(sq.length>=11){toast('XI already full');return;}sq.push(uid);}
-  DB.squad[mid]=sq;render();fbSet(`sandhurst/squad/${mid}`,sq);
+  DB.squad[mid]=sq;
+  _pendingSquad=true;
+  render();
+  fbSet(`sandhurst/squad/${mid}`,sq);
+  setTimeout(()=>{_pendingSquad=false;},3000);
 }
 
 // Drag desktop
@@ -372,7 +385,7 @@ function rMember(app){
     h+=`<span class="pill ${m.venue==='Home'?'home':'away'}">vs ${m.opponent} · ${fmtD(m.date)}${m.time?' at '+m.time:''} · ${m.venue}</span>`;
     if(lk)h+=`<div class="banner-err">🔒 Availability locked ${DB.settings.lockDays} days before the match.</div>`;
     h+=`<div class="card">`;
-    pl.forEach(p=>{const av=getAv(mid,p.id);const me=p.id===SES.uid;const ce=me&&!lk;h+=`<div class="row" style="${!me?'opacity:.3;pointer-events:none':''}"><div class="av" style="${me?'background:#1a5c2e;color:#fff':''}">${ini(p.name)}</div><div class="rname">${p.name}</div>${ce?`<div style="display:flex;gap:5px"><div class="tog${av==='yes'?' ay':''}" onclick="setAv('${mid}','${p.id}','yes')">Yes</div><div class="tog${av==='maybe'?' am':''}" onclick="setAv('${mid}','${p.id}','maybe')">Maybe</div><div class="tog${av==='no'?' an':''}" onclick="setAv('${mid}','${p.id}','no')">No</div></div>`:`<span class="atag ${av==='yes'?'tag-y':av==='no'?'tag-n':av==='maybe'?'tag-m':'tag-0'}">${av==='yes'?'Available':av==='no'?'Unavailable':av==='maybe'?'Maybe':'Not set'}</span>`}</div>`;});
+    pl.forEach(p=>{const av=getAv(mid,p.id);const me=p.id===SES.uid;const ce=me&&!lk;h+=`<div class="row" style="${!me?'opacity:.3;pointer-events:none':''}"><div class="av" style="${me?'background:#1a5c2e;color:#fff':''}">${ini(p.name)}</div><div class="rname">${p.name}</div>${ce?`<div style="display:flex;gap:5px"><div class="tog${av==='yes'?' ay':''}" onclick="setAv('${mid}','${p.id}',av==='yes'?'none':'yes')">Yes</div><div class="tog${av==='maybe'?' am':''}" onclick="setAv('${mid}','${p.id}',av==='maybe'?'none':'maybe')">Maybe</div><div class="tog${av==='no'?' an':''}" onclick="setAv('${mid}','${p.id}',av==='no'?'none':'no')">No</div></div>`:`<span class="atag ${av==='yes'?'tag-y':av==='no'?'tag-n':av==='maybe'?'tag-m':'tag-0'}">${av==='yes'?'Available':av==='no'?'Unavailable':av==='maybe'?'Maybe':'Not set'}</span>`}</div>`;});
     h+=`</div>`;
   }
   h+=`<div class="sec" style="margin-top:4px">My profile</div><div class="card"><label>Display name</label><div style="display:flex;gap:8px;margin-bottom:10px"><input id="f-nn" value="${SES.name||''}" style="margin:0;flex:1"><button class="btn sm primary" onclick="saveName()">Save</button></div><label>Change PIN</label><input id="f-cp0" type="password" placeholder="Current PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center"><input id="f-cp1" type="password" placeholder="New PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center"><input id="f-cp2" type="password" placeholder="Confirm new PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center"><button class="btn primary full" onclick="savePinChange()">Change PIN</button></div>`;
@@ -398,7 +411,7 @@ function rManager(app){
       if(isLk(mid))h+=`<div class="banner-err">🔒 Locked for members. You can still override.</div>`;
       h+=`<div class="stats"><div class="stat"><div class="stat-n">${avc(mid,'yes')}</div><div class="stat-l">Available</div></div><div class="stat"><div class="stat-n">${avc(mid,'maybe')}</div><div class="stat-l">Maybe</div></div><div class="stat"><div class="stat-n">${avc(mid,'no')}</div><div class="stat-l">Unavailable</div></div><div class="stat"><div class="stat-n">${avc(mid,'none')}</div><div class="stat-l">No response</div></div></div>`;
       h+=`<div class="card">`;
-      pl.forEach(p=>{const av=getAv(mid,p.id);const me=p.id===SES.uid;const tc={yes:'tag-y',no:'tag-n',maybe:'tag-m',none:'tag-0'}[av];const tl={yes:'Available',no:'Unavailable',maybe:'Maybe',none:'No response'}[av];h+=`<div class="row"><div class="av" style="${me?'background:#1a5c2e;color:#fff':''}">${ini(p.name)}</div><div class="rname">${p.name}${syms(p,true)}</div><span class="atag ${tc}" style="margin-right:6px">${tl}</span>${!isRO?`<div style="display:flex;gap:3px"><div class="tog${av==='yes'?' ay':''}" onclick="setAv('${mid}','${p.id}','yes')">Y</div><div class="tog${av==='maybe'?' am':''}" onclick="setAv('${mid}','${p.id}','maybe')">M</div><div class="tog${av==='no'?' an':''}" onclick="setAv('${mid}','${p.id}','no')">N</div></div>`:''}</div>`;});
+      pl.forEach(p=>{const av=getAv(mid,p.id);const me=p.id===SES.uid;const tc={yes:'tag-y',no:'tag-n',maybe:'tag-m',none:'tag-0'}[av];const tl={yes:'Available',no:'Unavailable',maybe:'Maybe',none:'No response'}[av];h+=`<div class="row"><div class="av" style="${me?'background:#1a5c2e;color:#fff':''}">${ini(p.name)}</div><div class="rname">${p.name}${syms(p,true)}</div><span class="atag ${tc}" style="margin-right:6px">${tl}</span>${!isRO?`<div style="display:flex;gap:3px"><div class="tog${av==='yes'?' ay':''}" onclick="setAv('${mid}','${p.id}',av==='yes'?'none':'yes')">Y</div><div class="tog${av==='maybe'?' am':''}" onclick="setAv('${mid}','${p.id}',av==='maybe'?'none':'maybe')">M</div><div class="tog${av==='no'?' an':''}" onclick="setAv('${mid}','${p.id}',av==='no'?'none':'no')">N</div></div>`:''}</div>`;});
       h+=`</div>`;
     }
   }
