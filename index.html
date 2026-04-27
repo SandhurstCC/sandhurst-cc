@@ -319,10 +319,10 @@ window.doLogin = function() {
   const user = Object.values(S.users).find(u => u.name.toLowerCase()===name && u.status==='active');
   if (!user) { S.pinError='Name not recognised. Check spelling or register below.'; render(); return; }
   if (user.pin !== hashPin(pin)) { S.pinError='Incorrect PIN.'; render(); return; }
-  S.currentUser = user;
+  S.currentUser = {...user};
   S.pinError = '';
   S.nameInput = ''; S.pinInput = '';
-  if (user.mustChange) { S.screen='changePin'; S.newPin=''; S.confirmPin=''; render(); return; }
+  if (user.mustChange) { S.screen='changePin'; S.newPin=''; S.confirmPin=''; S.pinError=''; render(); return; }
   S.screen = user.role==='manager'||user.role==='readonly' ? 'manager' : 'member';
   render();
   setTimeout(()=>requestPush(),1500);
@@ -633,7 +633,7 @@ function renderChangePin(app) {
   app.innerHTML=`<div class="login-wrap">
     <img src="${LOGO}" class="login-logo">
     <div class="login-title">Set your PIN</div>
-    <div class="login-sub">Welcome ${S.currentUser?.name?.split(' ')[0]}! Choose a personal PIN to use from now on.</div>
+    <div class="login-sub">Welcome ${S.currentUser?.name?.split(' ')[0] || 'there'}! Choose a personal PIN to use from now on.</div>
     <div class="login-card">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">New PIN (4+ digits)</label>
       <input type="password" placeholder="New PIN" inputmode="numeric"
@@ -1001,5 +1001,3 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script>if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});</script>
 </body>
 </html>
-HTMLEOF
-echo "Written: $(wc -c < /home/claude/sandhurst-v3/index.html) bytes"
