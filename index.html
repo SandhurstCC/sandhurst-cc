@@ -192,23 +192,44 @@ function initFB(){
   fbGet('sandhurst/users').then(s=>{if(!s.val()){const o={};SEEDS.forEach(u=>{o[u.id]=u;});fbSet('sandhurst/users',o);}});
   fbGet('sandhurst/matches').then(s=>{if(!s.val()){const o={};SEED_MATCHES.forEach(m=>{o[m.id]=m;});fbSet('sandhurst/matches',o);}});
   fbGet('sandhurst/settings').then(s=>{if(!s.val())fbSet('sandhurst/settings',DEF_SET);});
-  let _skipRender = false;
-  window._onValue(window._ref(window._db,'sandhurst'),snap=>{
-    const d=snap.val()||{};
-    DB.users=d.users||{};
-    DB.matches=d.matches||{};
-    DB.settings={...DEF_SET,...(d.settings||{})};
-    // Only update availability/squad from Firebase if we don't have a pending local write
-    if(!_pendingAvail) DB.availability=d.availability||{};
-    if(!_pendingSquad) DB.squad=d.squad||{};
-    DB.notifications=d.notifications?Object.values(d.notifications).sort((a,b)=>b.ts-a.ts):[];
-    DB.lock=d.lock||null;
+  // Listen to each path SEPARATELY so writes to one don't trigger re-render from others
+  const noRender=['login','changePin','register','pending'];
+
+  window._onValue(window._ref(window._db,'sandhurst/users'),snap=>{
+    DB.users=snap.val()||{};
+    if(!noRender.includes(UI.screen))render();
+  });
+  window._onValue(window._ref(window._db,'sandhurst/matches'),snap=>{
+    DB.matches=snap.val()||{};
     DB.live=true;
     if(!DB.matches[UI.mid])UI.mid=Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;
-    // Never re-render login screens - they handle themselves
-    const noRender=['login','changePin','register','pending'];
-    if(noRender.includes(UI.screen))return;
-    render();
+    if(!noRender.includes(UI.screen))render();
+  });
+  window._onValue(window._ref(window._db,'sandhurst/settings'),snap=>{
+    DB.settings={...DEF_SET,...(snap.val()||{})};
+    if(!noRender.includes(UI.screen))render();
+  });
+  window._onValue(window._ref(window._db,'sandhurst/notifications'),snap=>{
+    const d=snap.val()||{};
+    DB.notifications=Object.values(d).sort((a,b)=>b.ts-a.ts);
+    if(!noRender.includes(UI.screen))render();
+  });
+  // Availability and squad: update silently, only re-render if not mid-edit
+  window._onValue(window._ref(window._db,'sandhurst/availability'),snap=>{
+    const fresh=snap.val()||{};
+    // Merge: keep local changes, update everything else
+    Object.keys(fresh).forEach(mid=>{
+      if(!_localEdits.avail[mid]) DB.availability[mid]=fresh[mid];
+    });
+    if(!noRender.includes(UI.screen))render();
+  });
+  window._onValue(window._ref(window._db,'sandhurst/squad'),snap=>{
+    const fresh=snap.val()||{};
+    // Only update matches we haven't locally edited
+    Object.keys(fresh).forEach(mid=>{
+      if(!_localEdits.squad[mid]) DB.squad[mid]=fresh[mid];
+    });
+    if(!noRender.includes(UI.screen))render();
   });
 }
 function addNotif(text,target,mid,type){const id='n'+Date.now();fbSet(`sandhurst/notifications/${id}`,{id,ts:Date.now(),text,target,matchId:mid||null,type:type||'info',read:{}});}
@@ -265,8 +286,8 @@ function doRegister(){
 }
 function doLogout(){clearSes();UI.screen='login';UI.tab=0;render();}
 
-// Pending write flags
-let _pendingAvail=false,_pendingSquad=false;
+// Local edit tracker - prevents Firebase from overwriting changes mid-flight
+const _localEdits={avail:{},squad:{}};
 
 // Availability
 function setAv(mid,uid,val){
@@ -276,10 +297,11 @@ function setAv(mid,uid,val){
   if(SES.role==='member'&&isLk(mid))return;
   if(!DB.availability[mid])DB.availability[mid]={};
   DB.availability[mid][uid]=val;
-  _pendingAvail=true;
+  // Mark this match as locally edited for 5s
+  _localEdits.avail[mid]=true;
+  setTimeout(()=>delete _localEdits.avail[mid],5000);
   render();
   fbSet(`sandhurst/availability/${mid}/${uid}`,val);
-  setTimeout(()=>{_pendingAvail=false;},3000);
   if(SES.uid!==uid||SES.role!=='manager'){
     const p=DB.users[uid]||SEEDS.find(u=>u.id===uid);
     const m=getM(mid);
@@ -296,10 +318,10 @@ function togSq(mid,uid){
   if(i>-1)sq.splice(i,1);
   else{if(sq.length>=11){toast('XI already full');return;}sq.push(uid);}
   DB.squad[mid]=sq;
-  _pendingSquad=true;
+  _localEdits.squad[mid]=true;
+  setTimeout(()=>delete _localEdits.squad[mid],5000);
   render();
   fbSet(`sandhurst/squad/${mid}`,sq);
-  setTimeout(()=>{_pendingSquad=false;},3000);
 }
 
 // Drag desktop
@@ -308,14 +330,14 @@ function dS(e,u){dragU=u;e.dataTransfer.effectAllowed='move';}
 function dO(e){e.preventDefault();}
 function dE(e){e.currentTarget.classList.add('drag-over');}
 function dL(e){e.currentTarget.classList.remove('drag-over');}
-function dD(e,mid){e.preventDefault();const t=e.currentTarget.dataset.uid;if(!dragU||dragU===t)return;const sq=[...getSq(mid)];const fi=sq.indexOf(dragU),ti=sq.indexOf(t);if(fi>-1&&ti>-1){sq.splice(fi,1);sq.splice(ti,0,dragU);}DB.squad[mid]=sq;render();fbSet(`sandhurst/squad/${mid}`,sq);}
+function dD(e,mid){e.preventDefault();const t=e.currentTarget.dataset.uid;if(!dragU||dragU===t)return;const sq=[...getSq(mid)];const fi=sq.indexOf(dragU),ti=sq.indexOf(t);if(fi>-1&&ti>-1){sq.splice(fi,1);sq.splice(ti,0,dragU);}DB.squad[mid]=sq;_localEdits.squad[mid]=true;setTimeout(()=>delete _localEdits.squad[mid],5000);render();fbSet(`sandhurst/squad/${mid}`,sq);}
 function dEn(){dragU=null;}
 
 // Drag touch
 let tU=null,tM=null,tEl=null,tCl=null;
 function tS(e,u,m){tU=u;tM=m;tEl=e.currentTarget;tCl=tEl.cloneNode(true);tCl.style.cssText=`position:fixed;opacity:.7;pointer-events:none;z-index:999;width:${tEl.offsetWidth}px`;document.body.appendChild(tCl);tEl.style.opacity='.3';}
 function tMv(e){if(!tCl)return;e.preventDefault();const t=e.touches[0];tCl.style.left=(t.clientX-60)+'px';tCl.style.top=(t.clientY-20)+'px';document.querySelectorAll('.bat-row').forEach(r=>r.classList.remove('drag-over'));const el=document.elementFromPoint(t.clientX,t.clientY);const row=el&&el.closest('.bat-row');if(row&&row.dataset.uid!==tU)row.classList.add('drag-over');}
-function tEn(e){if(!tCl)return;document.body.removeChild(tCl);tCl=null;if(tEl)tEl.style.opacity='';const t=e.changedTouches[0];const el=document.elementFromPoint(t.clientX,t.clientY);const row=el&&el.closest('.bat-row');if(row&&row.dataset.uid!==tU&&tM&&SES.role==='manager'){const sq=[...getSq(tM)];const fi=sq.indexOf(tU),ti=sq.indexOf(row.dataset.uid);if(fi>-1&&ti>-1){sq.splice(fi,1);sq.splice(ti,0,tU);}DB.squad[tM]=sq;render();fbSet(`sandhurst/squad/${tM}`,sq);}tU=null;tM=null;tEl=null;}
+function tEn(e){if(!tCl)return;document.body.removeChild(tCl);tCl=null;if(tEl)tEl.style.opacity='';const t=e.changedTouches[0];const el=document.elementFromPoint(t.clientX,t.clientY);const row=el&&el.closest('.bat-row');if(row&&row.dataset.uid!==tU&&tM&&SES.role==='manager'){const sq=[...getSq(tM)];const fi=sq.indexOf(tU),ti=sq.indexOf(row.dataset.uid);if(fi>-1&&ti>-1){sq.splice(fi,1);sq.splice(ti,0,tU);}DB.squad[tM]=sq;_localEdits.squad[tM]=true;setTimeout(()=>delete _localEdits.squad[tM],5000);render();fbSet(`sandhurst/squad/${tM}`,sq);}tU=null;tM=null;tEl=null;}
 
 // Players
 function appP(uid){fbSet(`sandhurst/users/${uid}/status`,'active');const u=DB.users[uid];addNotif(`${u?.name} approved`,'all',null,'registration');toast(`${u?.name} approved`);}
