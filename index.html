@@ -582,6 +582,58 @@ window.doPDF = function(mid) {
 // ── RENDER ────────────────────────────────────────────────────────────────────
 function render() {
   const app=document.getElementById('app');
+  // For typing screens, only update the error message in-place — never wipe the whole screen
+  if (S.screen==='login') {
+    const existing = document.getElementById('login-form');
+    if (existing) {
+      // Just update error message without re-rendering the whole form
+      let errEl = document.getElementById('login-error');
+      if (S.pinError) {
+        if (!errEl) {
+          errEl = document.createElement('div');
+          errEl.id = 'login-error';
+          errEl.className = 'error';
+          document.getElementById('pin-inp')?.before(errEl);
+        }
+        errEl.textContent = S.pinError;
+      } else if (errEl) {
+        errEl.remove();
+      }
+      return;
+    }
+  }
+  if (S.screen==='changePin') {
+    const existing = document.getElementById('changepin-form');
+    if (existing) {
+      let errEl = document.getElementById('changepin-error');
+      if (S.pinError) {
+        if (!errEl) {
+          errEl = document.createElement('div');
+          errEl.id = 'changepin-error';
+          errEl.className = 'error';
+          document.getElementById('change-pin-conf')?.after(errEl);
+        }
+        errEl.textContent = S.pinError;
+      } else if (errEl) { errEl.remove(); }
+      return;
+    }
+  }
+  if (S.screen==='register') {
+    const existing = document.getElementById('register-form');
+    if (existing) {
+      let errEl = document.getElementById('register-error');
+      if (S.pinError) {
+        if (!errEl) {
+          errEl = document.createElement('div');
+          errEl.id = 'register-error';
+          errEl.className = 'error';
+          document.getElementById('reg-conf')?.after(errEl);
+        }
+        errEl.textContent = S.pinError;
+      } else if (errEl) { errEl.remove(); }
+      return;
+    }
+  }
   const screens={login:renderLogin,changePin:renderChangePin,register:renderRegister,pending:renderPending,member:renderMember,manager:renderManager};
   (screens[S.screen]||renderLogin)(app);
 }
@@ -627,7 +679,7 @@ function renderLogin(app) {
     <img src="${LOGO}" class="login-logo">
     <div class="login-title">Sandhurst CC</div>
     <div class="login-sub">Sign in to continue</div>
-    <div class="login-card">
+    <div class="login-card" id="login-form">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Your name</label>
       <input id="name-inp" type="text" placeholder="e.g. Joe Root" autocomplete="name"
         autocorrect="off" autocapitalize="words" spellcheck="false"
@@ -636,7 +688,7 @@ function renderLogin(app) {
       <input id="pin-inp" type="password" placeholder="Enter PIN" inputmode="numeric"
         onkeydown="if(event.key==='Enter')doLogin()"
         style="letter-spacing:4px;font-size:18px;text-align:center">
-      ${S.pinError?`<div class="error">${S.pinError}</div>`:''}
+      ${S.pinError?`<div id="login-error" class="error">${S.pinError}</div>`:''}
       <button class="btn primary" onclick="doLogin()">Sign in</button>
       <div class="divider">or</div>
       <button class="btn" onclick="setScreen('register')" style="background:#f4f4f2;border-color:#e0e0e0;color:#555">New player? Register here</button>
@@ -652,7 +704,7 @@ function renderChangePin(app) {
     <img src="${LOGO}" class="login-logo">
     <div class="login-title">Set your PIN</div>
     <div class="login-sub">Welcome ${S.currentUser?.name?.split(' ')[0] || 'there'}! Choose a personal PIN to use from now on.</div>
-    <div class="login-card">
+    <div class="login-card" id="changepin-form">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">New PIN (4+ digits)</label>
       <input id="change-pin-new" type="password" placeholder="New PIN" inputmode="numeric"
         autocomplete="new-password"
@@ -673,7 +725,7 @@ function renderRegister(app) {
     <img src="${LOGO}" class="login-logo">
     <div class="login-title">Register</div>
     <div class="login-sub">A manager will approve your account before you can access the app.</div>
-    <div class="login-card">
+    <div class="login-card" id="register-form">
       <label style="font-size:13px;color:#888;display:block;margin-bottom:5px">Your full name</label>
       <input id="reg-name" type="text" placeholder="First and last name" autocomplete="name"
         autocorrect="off" autocapitalize="words" spellcheck="false">
