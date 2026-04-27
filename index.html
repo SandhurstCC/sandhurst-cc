@@ -245,10 +245,10 @@ function initFirebase() {
     setTimeout(() => { if(S.screen==='login'&&!S.syncLive) initFirebase(); }, 5000);
     return;
   }
-  // Live listener
-  window._onValue(window._ref(window._db,'sandhurst'), snap => {
+  // One-time seed check - runs once then never again
+  let _seeded = false;
+  window._get(window._ref(window._db,'sandhurst')).then(snap => {
     const data = snap.val()||{};
-    // Seed default data if database is empty (non-blocking)
     if (!data.users) {
       const usersObj = {};
       SEED_USERS.forEach(u => { usersObj[u.id] = u; });
@@ -260,6 +260,12 @@ function initFirebase() {
       window._set(window._ref(window._db,'sandhurst/matches'), mObj);
     }
     if (!data.settings) window._set(window._ref(window._db,'sandhurst/settings'), DEFAULT_SETTINGS);
+    _seeded = true;
+  }).catch(() => { _seeded = true; });
+
+  // Live listener
+  window._onValue(window._ref(window._db,'sandhurst'), snap => {
+    const data = snap.val()||{};
     if (data.users)        S.users        = data.users;
     if (data.matches)      S.matches      = data.matches;
     if (data.settings)     S.settings     = {...DEFAULT_SETTINGS,...data.settings};
@@ -270,10 +276,13 @@ function initFirebase() {
     S.lockHolder = data.lock?.holder||null;
     S.lockExpiry = data.lock?.expiry||null;
     S.syncLive   = true;
-    // Refresh currentUser from db (name/pin may have changed)
+    // Refresh currentUser from db - but only update safe fields, never overwrite pin mid-session
     if (S.currentUser) {
       const fresh = S.users[S.currentUser.id];
-      if (fresh) S.currentUser = fresh;
+      if (fresh) {
+        // Keep the local pin and mustChange values - don't overwrite with stale seed data
+        S.currentUser = {...fresh, pin: S.currentUser.pin, mustChange: S.currentUser.mustChange};
+      }
     }
     // Never re-render screens where user is actively typing - just update data silently
     const typingScreens = ['login', 'changePin', 'register'];
@@ -409,28 +418,30 @@ window.saveNewPin = async function() {
 };
 
 // ── AVAILABILITY ──────────────────────────────────────────────────────────────
-window.setAvailFn = async function(mid, uid, val) {
+window.setAvailFn = function(mid, uid, val) {
   if (!S.currentUser) return;
   if (S.currentUser.role==='readonly') return;
   if (S.currentUser.role==='member') {
     const p = S.users[uid];
     const isOwn = S.currentUser.id===uid || (p && p.name.toLowerCase()===S.currentUser.name?.toLowerCase());
     if (!isOwn) return;
-    // If matched by name but ID differs, sync the ID
-    if (p && S.currentUser.id!==uid) {
-      S.currentUser = {...S.currentUser, id: uid};
-    }
+    if (p && S.currentUser.id!==uid) S.currentUser = {...S.currentUser, id: uid};
   }
   if (S.currentUser.role==='member' && isLocked(mid)) return;
   if (getAvail(mid,uid)===val) return;
-  await fbSet(`sandhurst/availability/${mid}/${uid}`, val);
-  // Only notify manager if it wasn't the manager marking their own row
-  const isSelf = S.currentUser.id === uid;
+  // Update local state immediately for snappy UI
+  if (!S.availability[mid]) S.availability[mid] = {};
+  S.availability[mid][uid] = val;
+  render();
+  // Write to Firebase in background - fire and forget
+  fbSet(`sandhurst/availability/${mid}/${uid}`, val);
+  // Notification - fire and forget, no await
+  const isSelf = S.currentUser.id===uid || S.users[uid]?.name?.toLowerCase()===S.currentUser.name?.toLowerCase();
   const isManager = S.currentUser.role==='manager';
   if (!isSelf || !isManager) {
     const player=S.users[uid]; const match=getMatch(mid);
     const labels={yes:'Available',no:'Unavailable',maybe:'Maybe'};
-    await addNotif(`${player?.name} marked ${labels[val]} for vs ${match?.opponent} (${fmtDate(match?.date)})`,'manager',mid,'availability');
+    addNotif(`${player?.name} marked ${labels[val]} for vs ${match?.opponent} (${fmtDate(match?.date)})`,'manager',mid,'availability');
   }
 };
 
@@ -834,9 +845,6 @@ function renderMember(app) {
     h+=`</div>`;
   }
   app.innerHTML=h;
-  // Only mark read if we actually scrolled to bottom (notifications visible)
-  // Use a flag to avoid calling on every render
-  if (!S._notifMarked) { S._notifMarked=true; setTimeout(()=>{ markRead(); },1500); }
 }
 
 // ── MANAGER SCREEN ────────────────────────────────────────────────────────────
