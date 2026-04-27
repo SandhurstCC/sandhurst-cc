@@ -300,7 +300,7 @@ async function markRead() {
   const key = S.currentUser.role==='member'?S.currentUser.id:'manager';
   const mine = S.notifications.filter(n=>{
     if (S.currentUser.role==='member') return (n.target==='all'||n.target===S.currentUser.id)&&!n.read?.[key];
-    return (n.target==='manager')&&!n.read?.[key];
+    return (n.target==='manager'||n.target==='all')&&!n.read?.[key];
   });
   for (const n of mine) await fbSet(`sandhurst/notifications/${n.id}/read/${key}`,true);
 }
@@ -318,7 +318,8 @@ window.doLogin = function() {
   const pin  = (document.getElementById('pin-inp')?.value || S.pinInput).trim();
   if (!name||!pin) { S.pinError='Enter your name and PIN.'; render(); return; }
   // Find user by name (case-insensitive)
-  const user = Object.values(S.users).find(u => u.name.toLowerCase()===name && u.status==='active');
+  const user = Object.values(S.users).find(u => u.name.toLowerCase()===name && u.status==='active')
+    || Object.values(S.users).find(u => u.name.toLowerCase().replace(/\s+/g,'')=== name.replace(/\s+/g,'') && u.status==='active');
   if (!user) { S.pinError='Name not recognised. Check spelling or register below.'; render(); return; }
   if (user.pin !== hashPin(pin)) { S.pinError='Incorrect PIN.'; render(); return; }
   S.currentUser = {...user};
@@ -407,7 +408,15 @@ window.saveNewPin = async function() {
 window.setAvailFn = async function(mid, uid, val) {
   if (!S.currentUser) return;
   if (S.currentUser.role==='readonly') return;
-  if (S.currentUser.role==='member' && S.currentUser.id!==uid) return;
+  if (S.currentUser.role==='member') {
+    const p = S.users[uid];
+    const isOwn = S.currentUser.id===uid || (p && p.name.toLowerCase()===S.currentUser.name?.toLowerCase());
+    if (!isOwn) return;
+    // If matched by name but ID differs, sync the ID
+    if (p && S.currentUser.id!==uid) {
+      S.currentUser = {...S.currentUser, id: uid};
+    }
+  }
   if (S.currentUser.role==='member' && isLocked(mid)) return;
   if (getAvail(mid,uid)===val) return;
   await fbSet(`sandhurst/availability/${mid}/${uid}`, val);
@@ -774,7 +783,9 @@ function renderMember(app) {
     if(locked) h+=`<div class="locked-banner">🔒 Availability locked ${S.settings.lockDays} days before the match. Contact a manager to change.</div>`;
     h+=`<div class="card">`;
     players.forEach(p=>{
-      const av=getAvail(mid,p.id); const me=p.id===S.currentUser.id; const canEdit=me&&!locked;
+      const av=getAvail(mid,p.id);
+      const me=p.id===S.currentUser.id || p.name.toLowerCase()===S.currentUser.name?.toLowerCase();
+      const canEdit=me&&!locked;
       h+=`<div class="avail-row" style="${!me?'opacity:.35;pointer-events:none':''}">
         <div class="avatar" style="${me?'background:#1a5c2e;color:#fff':''}">${ini(p.name)}</div>
         <div class="pname">${p.name}</div>
