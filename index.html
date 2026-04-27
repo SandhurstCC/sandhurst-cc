@@ -215,22 +215,10 @@ function initFB(){
     if(!noRender.includes(UI.screen))render();
   });
   // Availability and squad: update silently, only re-render if not mid-edit
-  window._onValue(window._ref(window._db,'sandhurst/availability'),snap=>{
-    const fresh=snap.val()||{};
-    // Merge: keep local changes, update everything else
-    Object.keys(fresh).forEach(mid=>{
-      if(!_localEdits.avail[mid]) DB.availability[mid]=fresh[mid];
-    });
-    if(!noRender.includes(UI.screen))render();
-  });
-  window._onValue(window._ref(window._db,'sandhurst/squad'),snap=>{
-    const fresh=snap.val()||{};
-    // Only update matches we haven't locally edited
-    Object.keys(fresh).forEach(mid=>{
-      if(!_localEdits.squad[mid]) DB.squad[mid]=fresh[mid];
-    });
-    if(!noRender.includes(UI.screen))render();
-  });
+  // availability and squad: load once, then sync on tab switch (not live)
+  // This prevents Firebase from wiping local edits mid-interaction
+  fbGet('sandhurst/availability').then(s=>{DB.availability=s.val()||{};if(!noRender.includes(UI.screen))render();});
+  fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};if(!noRender.includes(UI.screen))render();});
 }
 function addNotif(text,target,mid,type){const id='n'+Date.now();fbSet(`sandhurst/notifications/${id}`,{id,ts:Date.now(),text,target,matchId:mid||null,type:type||'info',read:{}});}
 function markRead(){if(!SES.uid)return;const k=SES.role==='member'?SES.uid:'manager';DB.notifications.filter(n=>{const mine=SES.role==='member'?(n.target==='all'||n.target===SES.uid):(n.target==='manager'||n.target==='all');return mine&&!n.read?.[k];}).forEach(n=>fbSet(`sandhurst/notifications/${n.id}/read/${k}`,true));}
@@ -372,7 +360,20 @@ function render(){
 
 const lImg=sz=>`<img src="${LOGO}" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;flex-shrink:0">`;
 function tbar(){const bd={manager:'badge-mgr',readonly:'badge-ro',member:'badge-m'};const lb={manager:'Manager',readonly:'Read-only',member:'Member'};return `<div class="topbar"><div class="topbar-left">${lImg(36)}<span class="club-name">Sandhurst CC</span></div><div style="display:flex;align-items:center;gap:8px"><div class="sync${DB.live?' on':''}"></div><span style="font-size:12px;color:#888;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${SES.name||''}</span><span class="badge ${bd[SES.role]||'badge-m'}">${lb[SES.role]||'Member'}</span><button class="btn sm" onclick="doLogout()">Out</button></div></div>`;}
-function mTabs(){const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));if(!ml.length)return'<div style="color:#bbb;font-size:13px;margin-bottom:14px">No matches yet.</div>';return`<div class="tabs">${ml.map(m=>{const c=m.venue==='Home'?'home':'away';const s=UI.mid===m.id?'sel':'';const d=daysTo(m.id);const lk=isLk(m.id);return`<button class="tab ${c} ${s}" onclick="UI.mid='${m.id}';render()"><div style="font-weight:600;font-size:13px">${m.opponent}</div><div style="font-size:11px;opacity:.75;margin-top:2px">${fmtD(m.date)}${m.time?' '+m.time:''}</div>${lk?`<div style="font-size:10px;color:#a32d2d;margin-top:1px">🔒 Locked</div>`:d>0&&d<=DB.settings.reminderDays?`<div style="font-size:10px;color:#854f0b">${d}d</div>`:''}</button>`;}).join('')}</div>`;}
+function refreshAvailSquad(){
+  fbGet('sandhurst/availability').then(s=>{
+    const fresh=s.val()||{};
+    // Only update matches not currently being edited
+    Object.keys(fresh).forEach(mid=>{if(!_localEdits.avail[mid])DB.availability[mid]=fresh[mid];});
+    render();
+  });
+  fbGet('sandhurst/squad').then(s=>{
+    const fresh=s.val()||{};
+    Object.keys(fresh).forEach(mid=>{if(!_localEdits.squad[mid])DB.squad[mid]=fresh[mid];});
+    render();
+  });
+}
+function mTabs(){const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));if(!ml.length)return'<div style="color:#bbb;font-size:13px;margin-bottom:14px">No matches yet.</div>';return`<div class="tabs">${ml.map(m=>{const c=m.venue==='Home'?'home':'away';const s=UI.mid===m.id?'sel':'';const d=daysTo(m.id);const lk=isLk(m.id);return`<button class="tab ${c} ${s}" onclick="UI.mid='${m.id}';refreshAvailSquad();render()"><div style="font-weight:600;font-size:13px">${m.opponent}</div><div style="font-size:11px;opacity:.75;margin-top:2px">${fmtD(m.date)}${m.time?' '+m.time:''}</div>${lk?`<div style="font-size:10px;color:#a32d2d;margin-top:1px">🔒 Locked</div>`:d>0&&d<=DB.settings.reminderDays?`<div style="font-size:10px;color:#854f0b">${d}d</div>`:''}</button>`;}).join('')}</div>`;}
 
 function rLogin(app){
   app.innerHTML=`<div class="login-wrap"><img src="${LOGO}" class="login-logo"><div class="login-title">Sandhurst CC</div><div class="login-sub">Sign in to continue</div><div class="login-card"><label>Your name</label><input id="f-name" type="text" placeholder="e.g. Joe Root" autocomplete="name" autocorrect="off" autocapitalize="words" spellcheck="false"><label>PIN</label><input id="f-pin" type="password" placeholder="Enter PIN" inputmode="numeric" style="letter-spacing:4px;font-size:18px;text-align:center"><div id="f-err" class="err" style="display:none"></div><button class="btn primary full" onclick="doLogin()">Sign in</button><div class="divider">or</div><button class="btn full" style="background:#f4f4f2;border-color:#e0e0e0;color:#555" onclick="UI.screen='register';render()">New player? Register here</button><div class="hint">First time? Use PIN: 1000</div></div></div>`;
@@ -423,7 +424,7 @@ function rManager(app){
   const pend=pendP();const uc=unread();
   const tabs=['Availability','Team','Matches','Notifications','Players','Export','Settings'];
   let h=tbar();
-  h+=`<div class="mtabs">${tabs.map((t,i)=>{const b=(i===3&&uc>0)?`<span class="nbadge">${uc}</span>`:(i===4&&pend.length>0)?`<span class="nbadge">${pend.length}</span>`:'';return`<button class="mtab${UI.tab===i?' sel':''}" onclick="UI.tab=${i};${i===3?'markRead();':''}render()">${t}${b}</button>`;}).join('')}</div>`;
+  h+=`<div class="mtabs">${tabs.map((t,i)=>{const b=(i===3&&uc>0)?`<span class="nbadge">${uc}</span>`:(i===4&&pend.length>0)?`<span class="nbadge">${pend.length}</span>`:'';const extra=(i===0||i===1)?'refreshAvailSquad();':'';return`<button class="mtab${UI.tab===i?' sel':''}" onclick="UI.tab=${i};${extra}${i===3?'markRead();':''}render()">${t}${b}</button>`;}).join('')}</div>`;
 
   if(UI.tab===0){
     const pl=allP();
