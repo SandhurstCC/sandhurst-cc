@@ -235,12 +235,13 @@ function initFB(){
   window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
   window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
   // Avail and squad: one-time load, refresh on tab switch
-  fbGet('sandhurst/avail').then(s=>{DB.avail=s.val()||{};render();});
-  fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});
+  function loadAvail(){fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});}
+  function loadSquad(){fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});}
+  loadAvail();loadSquad();
 }
 
 function refreshAvSq(){
-  fbGet('sandhurst/avail').then(s=>{DB.avail=s.val()||{};render();});
+  fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});
   fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});
 }
 
@@ -340,6 +341,7 @@ function setAv(mid,uid,val){
   renderAvailList(mid);
   // Write to Firebase
   fbSet('sandhurst/avail/'+mid+'/'+uid,newVal);
+  fbSet('sandhurst/availability/'+mid+'/'+uid,newVal);
   // Notify
   if(newVal!=='none'&&(SES.uid!==uid||SES.role!=='manager')){
     const p=DB.users[uid]||SEEDS.find(u=>u.id===uid);
