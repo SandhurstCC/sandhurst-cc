@@ -196,7 +196,11 @@ const ini  = n => n.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(
 const fmtD = d => {if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];};
 const allP = () => {
   const from=Object.values(DB.users).filter(u=>u.status==='active');
-  return (from.length?from:SEEDS.filter(u=>u.status==='active')).sort((a,b)=>a.name.localeCompare(b.name));
+  const list=(from.length?from:SEEDS.filter(u=>u.status==='active')).sort((a,b)=>a.name.localeCompare(b.name));
+  if(!SES.uid)return list;
+  const me=list.find(p=>p.id===SES.uid);
+  if(!me)return list;
+  return [me,...list.filter(p=>p.id!==SES.uid)];
 };
 const pendP= () => Object.values(DB.users).filter(u=>u.status==='pending');
 const getM = id => DB.matches[id]||Object.values(DB.matches)[0]||SEED_MATCHES[0];
