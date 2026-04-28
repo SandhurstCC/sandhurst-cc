@@ -386,6 +386,18 @@ function tMv(e){if(!tCl)return;e.preventDefault();const t=e.touches[0];tCl.style
 function tEn(e){if(!tCl)return;document.body.removeChild(tCl);tCl=null;if(tEl)tEl.style.opacity='';const t=e.changedTouches[0];const el=document.elementFromPoint(t.clientX,t.clientY);const row=el&&el.closest('.bat-row');if(row&&row.dataset.uid!==tU&&tM&&SES.role==='manager'){const sq=[...getSq(tM)];const fi=sq.indexOf(tU),ti=sq.indexOf(row.dataset.uid);if(fi>-1&&ti>-1){sq.splice(fi,1);sq.splice(ti,0,tU);}DB.squad[tM]=sq;render();fbSet('sandhurst/squad/'+tM,sq);}tU=null;tM=null;tEl=null;}
 
 // ── PLAYERS ───────────────────────────────────────────────────────────────────
+function addPlayer(){
+  const name=(document.getElementById('ap-name')?document.getElementById('ap-name').value:'').trim();
+  const role=document.getElementById('ap-role')?document.getElementById('ap-role').value:'member';
+  if(name.length<2){toast('Enter a full name');return;}
+  const all=Object.values(DB.users).length?Object.values(DB.users):SEEDS;
+  if(all.find(u=>u.name.toLowerCase()===name.toLowerCase())){toast('Name already exists');return;}
+  const uid='u_'+Date.now().toString(36);
+  fbSet('sandhurst/users/'+uid,{id:uid,name,role,pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false});
+  addNotif(name+' added to the squad by manager','all',null,'registration');
+  toast(name+' added with PIN 1000');
+  render();
+}
 function approveP(uid){fbSet('sandhurst/users/'+uid+'/status','active');const u=DB.users[uid];addNotif((u?u.name:'Player')+' approved','all',null,'reg');toast((u?u.name:'Player')+' approved');}
 function rejectP(uid){if(!confirm('Remove?'))return;fbSet('sandhurst/users/'+uid,null);}
 function saveName(){const n=(document.getElementById('f-nn')?document.getElementById('f-nn').value:'').trim();if(n.length<2){toast('Enter a valid name');return;}SES.name=n;LS.s('s_name',n);fbSet('sandhurst/users/'+SES.uid+'/name',n);toast('Name updated');render();}
@@ -710,6 +722,16 @@ function rMgr(app){
     h+='<div style="font-size:14px;font-weight:600;margin-bottom:8px">Active ('+allP().length+')</div><div class="card">';
     allP().forEach(function(p){h+='<div class="p-row"><div class="av-c">'+ini(p.name)+'</div><div class="p-name">'+p.name+syms(p,true)+'</div><span class="badge '+(p.role==='manager'?'badge-mgr':'badge-m')+'" style="margin-left:auto">'+(p.role==='manager'?'Manager':'Member')+'</span></div>';});
     h+='</div>';
+    // Add new player form
+    h+='<div style="font-size:14px;font-weight:600;margin-bottom:8px">Add player</div>'
+      +'<div class="card">'
+      +'<label>Full name</label>'
+      +'<input id="ap-name" type="text" placeholder="First and last name" autocomplete="off" autocorrect="off" autocapitalize="words">'
+      +'<label>Role</label>'
+      +'<select id="ap-role"><option>member</option><option>manager</option></select>'
+      +'<div style="font-size:12px;color:#aaa;margin-bottom:10px">Player will be added with default PIN 1000 and prompted to change on first login.</div>'
+      +'<button class="btn primary full" onclick="addPlayer()">+ Add player</button>'
+      +'</div>';
     h+='<div style="font-size:14px;font-weight:600;margin-bottom:8px">My profile</div>'
       +'<div class="card">'
       +'<label>Display name</label>'
