@@ -619,6 +619,12 @@ function rMem(app){
   if(m.id){
     h+=pillHtml(m);
     if(lk)h+='<div class="err-box">🔒 Availability locked '+DB.settings.lockDays+' days before the match.</div>';
+    h+='<div class="stats">'
+      +'<div class="stat"><div class="stat-n">'+avc(mid,'yes')+'</div><div class="stat-l">Available</div></div>'
+      +'<div class="stat"><div class="stat-n">'+avc(mid,'maybe')+'</div><div class="stat-l">Maybe</div></div>'
+      +'<div class="stat"><div class="stat-n">'+avc(mid,'no')+'</div><div class="stat-l">Unavailable</div></div>'
+      +'<div class="stat"><div class="stat-n">'+avc(mid,'none')+'</div><div class="stat-l">No response</div></div>'
+      +'</div>';
     h+='<div class="card" id="av-list"></div>';
   }
   h+='<div class="sec" style="margin-top:4px">My profile</div>'
