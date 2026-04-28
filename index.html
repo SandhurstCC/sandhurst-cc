@@ -691,8 +691,8 @@ function rMgr(app){
         h+='<div style="font-size:13px;font-weight:600;color:#1a5c2e;margin-bottom:8px">Batting order'+(isRO?'':' <span style="font-weight:400;color:#bbb;font-size:11px">— drag to reorder</span>')+'</div>';
         sq.forEach(function(uid,i){
           const p=DB.users[uid];if(!p)return;const av=getAv(mid,uid);
-          const da=isRO?'':'draggable="true" data-uid="'+uid+'" ondragstart="dS(event,\''+uid+'\')" ondragover="dO(event)" ondragenter="dE(event)" ondragleave="dL(event)" ondrop="dD(event,\''+mid+'\')" ondragend="dEn()" ontouchstart="tS(event,\''+uid+'\',\''+mid+'\')" ontouchmove="tMv(event)" ontouchend="tEn(event)"';
-          h+='<div class="bat-row" '+da+'>'+(isRO?'':'<span class="dh">⠿</span>')+'<div class="bnum on">'+(i+1)+'</div><div class="av-c" style="background:#1a5c2e;color:#fff">'+ini(p.name)+'</div><div class="p-name">'+p.name+syms(p,true)+'</div><span class="atag '+(av==='yes'?'tag-y':'tag-m')+'" style="margin-right:4px">'+(av==='yes'?'Avail':'Maybe')+'</span>'+(isRO?'':'<button class="btn icon-btn" onclick="togSq(\''+mid+'\',\''+uid+'\')">×</button>')+'</div>';
+          const da=isRO?'':'data-uid="'+uid+'" ondragover="dO(event)" ondragenter="dE(event)" ondragleave="dL(event)" ondrop="dD(event,\''+mid+'\')"';
+          h+='<div class="bat-row" '+da+'>'+(isRO?'':'<span class="dh" draggable="true" ondragstart="dS(event,\''+uid+'\')" ondragend="dEn()" ontouchstart="tS(event,\''+uid+'\',\''+mid+'\')" ontouchmove="tMv(event)" ontouchend="tEn(event)">⠿</span>')+'<div class="bnum on">'+(i+1)+'</div><div class="av-c" style="background:#1a5c2e;color:#fff">'+ini(p.name)+'</div><div class="p-name">'+p.name+syms(p,true)+'</div><span class="atag '+(av==='yes'?'tag-y':'tag-m')+'" style="margin-right:4px">'+(av==='yes'?'Avail':'Maybe')+'</span>'+(isRO?'':'<button class="btn icon-btn" onclick="togSq(\''+mid+'\',\''+uid+'\')">×</button>')+'</div>';
         });
       }
       if(notSel.length>0&&!isRO){
