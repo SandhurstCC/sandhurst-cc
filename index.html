@@ -446,9 +446,8 @@ function rMember(app){
   else{h+=`<div class="card">`;myN.slice(0,10).forEach(n=>{const u=!n.read?.[SES.uid];h+=`<div class="notif-row"><div class="ndot${u?'':' read'}"></div><div style="flex:1;font-size:13px${u?';font-weight:600':''}">${n.text}</div><div style="font-size:11px;color:#bbb;white-space:nowrap">${ago(n.ts)}</div></div>`;});h+=`</div>`;}
   app.innerHTML=h;
   // NOW build availability rows - container exists in DOM
-  if(m.id){
-    const listEl=document.getElementById('av-list-member');
-    if(listEl) pl.forEach(p=>{
+  const listEl=document.getElementById('av-list-member');
+  if(listEl) pl.forEach(p=>{
       const av=getAv(mid,p.id);
       const me=p.id===SES.uid;
       const ce=me&&!lk;
@@ -481,7 +480,6 @@ function rMember(app){
       }
       listEl.appendChild(row);
     });
-  }
   setTimeout(()=>markRead(),1000);
 }
 
