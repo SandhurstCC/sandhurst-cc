@@ -286,20 +286,22 @@ function fbGet(path){return window._get(window._ref(window._db,path));}
 
 function initFB(){
   if(!window._firebaseReady){document.addEventListener('firebase-ready',initFB,{once:true});return;}
-  // Seed only if empty
-  fbGet('sandhurst/users').then(s=>{if(!s.val()){const o={};SEEDS.forEach(u=>{o[u.id]=u;});fbSet('sandhurst/users',o);}});
-  fbGet('sandhurst/matches').then(s=>{if(!s.val()){const o={};SEED_MATCHES.forEach(m=>{o[m.id]=m;});fbSet('sandhurst/matches',o);}});
-  fbGet('sandhurst/settings').then(s=>{if(!s.val())fbSet('sandhurst/settings',DEF_SETTINGS);});
+  // Seed only if empty and not in demo mode
+  if(!DEMO_MODE){
+    fbGet('sandhurst/users').then(s=>{if(!s.val()){const o={};SEEDS.forEach(u=>{o[u.id]=u;});fbSet('sandhurst/users',o);}});
+    fbGet('sandhurst/matches').then(s=>{if(!s.val()){const o={};SEED_MATCHES.forEach(m=>{o[m.id]=m;});fbSet('sandhurst/matches',o);}});
+    fbGet('sandhurst/settings').then(s=>{if(!s.val())fbSet('sandhurst/settings',DEF_SETTINGS);});
+  }
   // Separate listeners per path - no single root listener
   const noRe=['login','pin','register','pending'];
-  window._onValue(window._ref(window._db,'sandhurst/users'),s=>{DB.users=s.val()||{};if(!noRe.includes(UI.screen))render();});
-  window._onValue(window._ref(window._db,'sandhurst/matches'),s=>{DB.matches=s.val()||{};DB.live=true;if(!DB.matches[UI.mid])UI.mid=Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;if(!noRe.includes(UI.screen))render();});
-  window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
-  window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/users'),s=>{if(DEMO_MODE)return;DB.users=s.val()||{};if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/matches'),s=>{if(DEMO_MODE)return;DB.matches=s.val()||{};DB.live=true;if(!DB.matches[UI.mid])UI.mid=Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{if(DEMO_MODE)return;DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{if(DEMO_MODE)return;const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
   // Avail and squad: one-time load, refresh on tab switch
-  function loadAvail(){fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});}
-  function loadSquad(){fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});}
-  loadAvail();loadSquad();
+  function loadAvail(){if(DEMO_MODE)return;fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});}
+  function loadSquad(){if(DEMO_MODE)return;fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});}
+  if(!DEMO_MODE){loadAvail();loadSquad();}
 }
 
 function refreshAvSq(){
