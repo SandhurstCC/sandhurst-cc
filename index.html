@@ -63,8 +63,8 @@ label{display:block;font-size:13px;color:#888;margin-bottom:5px}
 .stat{flex:1;background:#f4f9f4;border-radius:10px;padding:10px;text-align:center}
 .stat-n{font-size:22px;font-weight:700;color:#1a5c2e}
 .stat-l{font-size:11px;color:#999;margin-top:2px}
-.tab-bar{display:flex;gap:5px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.tab-bar::-webkit-scrollbar{display:none}
+.tab-bar{display:flex;gap:5px;margin-bottom:14px;overflow-x:auto;scrollbar-width:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+@media(hover:hover){.tab-bar::-webkit-scrollbar{height:6px}.tab-bar::-webkit-scrollbar-track{background:#f0f0f0;border-radius:3px}.tab-bar::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}}
 .tab-btn{flex-shrink:0;padding:7px 14px;border-radius:10px;border:1px solid #ddd;font-size:13px;font-weight:500;color:#888;background:#fafafa;position:relative;touch-action:manipulation}
 .tab-btn.sel{background:#1a5c2e;color:#fff;border-color:#1a5c2e}
 .nbadge{position:absolute;top:-5px;right:-5px;background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center}
@@ -189,6 +189,7 @@ let UI={
   screen: SES.uid?(SES.mc?'pin':(SES.role==='manager'||SES.role==='readonly'?'mgr':'mem')):'login',
   mid: SEED_MATCHES[0].id,
   tab: 0,
+  memTab: 0,
 };
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -613,64 +614,82 @@ function rMem(app){
   const lk=isLk(mid);const d=dTo(mid);
   const myN=DB.notifs.filter(n=>n.target==='all'||n.target===SES.uid);
   const ur=myN.filter(n=>!n.read?.[SES.uid]).length;
+  const memTabs=['Availability','Profile','Notifications','Help'];
   let h=tbar();
-  if(d>0&&d<=DB.settings.reminderDays&&getAv(mid,SES.uid)==='none')
-    h+='<div class="warn">⏰ Please mark your availability for vs '+m.opponent+' — '+d+' day'+(d===1?'':'s')+' to go!</div>';
-  h+='<div class="sec">My availability</div><div class="sub">Only your own row is editable.</div>';
-  h+=mTabs('refreshAvSq();');
-  if(m.id){
-    h+=pillHtml(m);
-    if(lk)h+='<div class="err-box">🔒 Availability locked '+DB.settings.lockDays+' days before the match.</div>';
-    h+='<div class="stats">'
-      +'<div class="stat"><div class="stat-n">'+avc(mid,'yes')+'</div><div class="stat-l">Available</div></div>'
-      +'<div class="stat"><div class="stat-n">'+avc(mid,'maybe')+'</div><div class="stat-l">Maybe</div></div>'
-      +'<div class="stat"><div class="stat-n">'+avc(mid,'no')+'</div><div class="stat-l">Unavailable</div></div>'
-      +'<div class="stat"><div class="stat-n">'+avc(mid,'none')+'</div><div class="stat-l">No response</div></div>'
+  // Member tab bar
+  h+='<div class="tab-bar">';
+  memTabs.forEach(function(t,i){
+    const b=(i===2&&ur>0)?'<span class="nbadge">'+ur+'</span>':'';
+    h+='<button class="tab-btn'+(UI.memTab===i?' sel':'')+'" onclick="UI.memTab='+i+';'+(i===2?'markRead();':'')+'render()">'+t+b+'</button>';
+  });
+  h+='</div>';
+
+  if(UI.memTab===0){
+    if(d>0&&d<=DB.settings.reminderDays&&getAv(mid,SES.uid)==='none')
+      h+='<div class="warn">⏰ Please mark your availability for vs '+m.opponent+' — '+d+' day'+(d===1?'':'s')+' to go!</div>';
+    h+='<div class="sec">My availability</div><div class="sub">Only your own row is editable.</div>';
+    h+=mTabs('refreshAvSq();');
+    if(m.id){
+      h+=pillHtml(m);
+      if(lk)h+='<div class="err-box">🔒 Availability locked '+DB.settings.lockDays+' days before the match.</div>';
+      h+='<div class="stats">'
+        +'<div class="stat"><div class="stat-n">'+avc(mid,'yes')+'</div><div class="stat-l">Available</div></div>'
+        +'<div class="stat"><div class="stat-n">'+avc(mid,'maybe')+'</div><div class="stat-l">Maybe</div></div>'
+        +'<div class="stat"><div class="stat-n">'+avc(mid,'no')+'</div><div class="stat-l">Unavailable</div></div>'
+        +'<div class="stat"><div class="stat-n">'+avc(mid,'none')+'</div><div class="stat-l">No response</div></div>'
+        +'</div>';
+      h+='<div class="card" id="av-list"></div>';
+    }
+  }
+  else if(UI.memTab===1){
+    h+='<div class="sec">My profile</div>'
+      +'<div class="card">'
+      +'<label>Display name</label>'
+      +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+      +'<input id="f-nn" value="'+(SES.name||'')+'" style="margin:0;flex:1">'
+      +'<button class="btn sm primary" onclick="saveName()">Save</button>'
+      +'</div>'
+      +'<label>Change PIN</label>'
+      +'<input id="f-pc" type="password" placeholder="Current PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center">'
+      +'<input id="f-pn" type="password" placeholder="New PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center">'
+      +'<input id="f-pf" type="password" placeholder="Confirm new PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center">'
+      +'<button class="btn primary full" onclick="savePinCh()">Change PIN</button>'
       +'</div>';
-    h+='<div class="card" id="av-list"></div>';
   }
-  h+='<div class="sec" style="margin-top:4px">My profile</div>'
-    +'<div class="card">'
-    +'<label>Display name</label>'
-    +'<div style="display:flex;gap:8px;margin-bottom:10px">'
-    +'<input id="f-nn" value="'+(SES.name||'')+'" style="margin:0;flex:1">'
-    +'<button class="btn sm primary" onclick="saveName()">Save</button>'
-    +'</div>'
-    +'<label>Change PIN</label>'
-    +'<input id="f-pc" type="password" placeholder="Current PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center">'
-    +'<input id="f-pn" type="password" placeholder="New PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center">'
-    +'<input id="f-pf" type="password" placeholder="Confirm new PIN" inputmode="numeric" style="letter-spacing:3px;text-align:center">'
-    +'<button class="btn primary full" onclick="savePinCh()">Change PIN</button>'
-    +'</div>';
-  h+='<div class="sec" style="margin-top:4px">Notifications'+(ur>0?' <span style="font-size:13px;font-weight:400;color:#e24b4a">('+ur+' new)</span>':'')+'</div>';
-  if(!myN.length)h+='<div style="color:#bbb;font-size:13px;text-align:center;padding:16px">No notifications yet.</div>';
-  else{
-    h+='<div class="card">';
-    myN.slice(0,10).forEach(n=>{const u=!n.read?.[SES.uid];h+='<div class="notif-row"><div class="ndot'+(u?'':' r')+'"></div><div style="flex:1;font-size:13px'+(u?';font-weight:600':'')+'">'+n.text+'</div><div style="font-size:11px;color:#bbb;white-space:nowrap">'+ago(n.ts)+'</div></div>';});
-    h+='</div>';
+  else if(UI.memTab===2){
+    h+='<div class="sec">Notifications</div>';
+    if(!myN.length)h+='<div style="color:#bbb;font-size:13px;text-align:center;padding:16px">No notifications yet.</div>';
+    else{
+      h+='<div class="card">';
+      myN.slice(0,20).forEach(n=>{const u=!n.read?.[SES.uid];h+='<div class="notif-row"><div class="ndot'+(u?'':' r')+'"></div><div style="flex:1;font-size:13px'+(u?';font-weight:600':'')+'">'+n.text+'</div><div style="font-size:11px;color:#bbb;white-space:nowrap">'+ago(n.ts)+'</div></div>';});
+      h+='</div>';
+    }
   }
-  h+='<div class="sec" style="margin-top:4px">Help</div>'
-    +'<div class="card">'
-    +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">📱 Install as an app</div>'
-    +'<div style="font-size:13px;color:#555;line-height:1.6">'
-    +'<b>iPhone:</b> Open in Safari → tap Share (box with arrow) → <b>Add to Home Screen</b>.<br><br>'
-    +'<b>Android:</b> Open in Chrome → three-dot menu → <b>Add to Home Screen</b>.'
-    +'</div></div>'
-    +'<div class="card">'
-    +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">📋 How to use</div>'
-    +'<div style="font-size:13px;color:#555;line-height:1.6">'
-    +'<b>Availability</b> — Tap a match at the top to switch between fixtures. Tap <b>Yes</b>, <b>Maybe</b> or <b>No</b> on your own row. Other players are shown read-only so you can see who else is available.<br><br>'
-    +'<b>Profile</b> — Update your display name or change your PIN at any time.<br><br>'
-    +'<b>Notifications</b> — See match updates and availability reminders from your manager.<br><br>'
-    +'<b>Availability lock</b> — Your manager sets a cut-off before each match (usually 3 days). After that your availability is locked 🔒 and cannot be changed.'
-    +'</div></div>';
+  else if(UI.memTab===3){
+    h+='<div class="sec">Help</div>'
+      +'<div class="card">'
+      +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">📱 Install as an app</div>'
+      +'<div style="font-size:13px;color:#555;line-height:1.6">'
+      +'<b>iPhone:</b> Open in Safari → tap Share (box with arrow) → <b>Add to Home Screen</b>.<br><br>'
+      +'<b>Android:</b> Open in Chrome → three-dot menu → <b>Add to Home Screen</b>.'
+      +'</div></div>'
+      +'<div class="card">'
+      +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">📋 How to use</div>'
+      +'<div style="font-size:13px;color:#555;line-height:1.6">'
+      +'<b>Availability</b> — Tap a match at the top to switch between fixtures. Tap <b>Yes</b>, <b>Maybe</b> or <b>No</b> on your own row. Other players are shown read-only so you can see who else is available.<br><br>'
+      +'<b>Profile</b> — Update your display name or change your PIN at any time.<br><br>'
+      +'<b>Notifications</b> — See match updates and availability reminders from your manager.<br><br>'
+      +'<b>Availability lock</b> — Your manager sets a cut-off before each match (usually 3 days). After that your availability is locked 🔒 and cannot be changed.'
+      +'</div></div>';
+  }
+
   app.innerHTML=h;
   restoreMatchScroll();
-  renderAvailList(mid);
-  setTimeout(function(){markRead();},1000);
+  if(UI.memTab===0&&m.id)renderAvailList(mid);
+  if(UI.memTab===2)setTimeout(function(){markRead();},1000);
 }
 
-// ── MANAGER SCREEN ────────────────────────────────────────────────────────────
+
 function rMgr(app){
   const mid=UI.mid;const m=getM(mid);const isRO=SES.role==='readonly';
   const pend=pendP();const uc=unread();
