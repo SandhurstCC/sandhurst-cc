@@ -459,6 +459,11 @@ function addPlayer(){
   toast(name+' added with PIN 1000');
   render();
 }
+function removePlayer(uid,name){
+  if(!confirm('Remove '+name+' from the squad? This cannot be undone.'))return;
+  fbSet('sandhurst/users/'+uid,null);
+  toast(name+' removed');
+}
 function approveP(uid){fbSet('sandhurst/users/'+uid+'/status','active');const u=DB.users[uid];addNotif((u?u.name:'Player')+' approved','all',null,'reg');toast((u?u.name:'Player')+' approved');}
 function rejectP(uid){if(!confirm('Remove?'))return;fbSet('sandhurst/users/'+uid,null);}
 function saveName(){const n=(document.getElementById('f-nn')?document.getElementById('f-nn').value:'').trim();if(n.length<2){toast('Enter a valid name');return;}SES.name=n;LS.s('s_name',n);fbSet('sandhurst/users/'+SES.uid+'/name',n);toast('Name updated');render();}
@@ -836,7 +841,7 @@ function rMgr(app){
       h+='</div>';
     }
     h+='<div style="font-size:14px;font-weight:600;margin-bottom:8px">Active ('+allP().length+')</div><div class="card">';
-    allP().forEach(function(p){h+='<div class="p-row"><div class="av-c">'+ini(p.name)+'</div><div class="p-name">'+p.name+syms(p,true)+'</div><span class="badge '+(p.role==='manager'?'badge-mgr':'badge-m')+'" style="margin-left:auto">'+(p.role==='manager'?'Manager':'Member')+'</span></div>';});
+    allP().forEach(function(p){h+='<div class="p-row"><div class="av-c">'+ini(p.name)+'</div><div class="p-name">'+p.name+syms(p,true)+'</div><span class="badge '+(p.role==='manager'?'badge-mgr':'badge-m')+'" style="margin-left:auto">'+(p.role==='manager'?'Manager':'Member')+'</span>'+(isRO?'':'<button class="btn sm ghost-red" style="margin-left:8px" onclick="removePlayer(\''+p.id+'\',\''+p.name+'\')" >Remove</button>')+'</div>';});
     h+='</div>';
 
     h+='<div style="font-size:14px;font-weight:600;margin-bottom:8px">My profile</div>'
