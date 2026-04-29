@@ -150,15 +150,16 @@ function enterDemo(){
     {id:'n2',ts:Date.now()-7200000,text:'Match updated: vs Eversley — 17/05/2026 at 13:00 (Away)',target:'all',read:{}},
   ];
   DB.live=true;
-  UI.mid='dm1';UI.tab=0;
+  UI.screen='mgr';UI.mid='dm1';UI.tab=0;
   render();
 }
 
 function exitDemo(){
   DEMO_MODE=false;
-  clearSes();
+  // Reset DB so Firebase listeners repopulate cleanly on next login
   DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},notifs:[],live:false};
-  UI.screen='login';UI.tab=0;
+  clearSes();
+  UI.screen='login';UI.tab=0;UI.memTab=0;
   render();
 }
 
@@ -286,23 +287,27 @@ function fbGet(path){return window._get(window._ref(window._db,path));}
 
 function initFB(){
   if(!window._firebaseReady){document.addEventListener('firebase-ready',initFB,{once:true});return;}
-  // Seed only if empty
-  fbGet('sandhurst/users').then(s=>{if(!s.val()){const o={};SEEDS.forEach(u=>{o[u.id]=u;});fbSet('sandhurst/users',o);}});
-  fbGet('sandhurst/matches').then(s=>{if(!s.val()){const o={};SEED_MATCHES.forEach(m=>{o[m.id]=m;});fbSet('sandhurst/matches',o);}});
-  fbGet('sandhurst/settings').then(s=>{if(!s.val())fbSet('sandhurst/settings',DEF_SETTINGS);});
+  // Seed only once, only if empty, never in demo mode
+  if(!DEMO_MODE&&!window._seeded){
+    window._seeded=true;
+    fbGet('sandhurst/users').then(s=>{if(!DEMO_MODE&&!s.val()){const o={};SEEDS.forEach(u=>{o[u.id]=u;});fbSet('sandhurst/users',o);}});
+    fbGet('sandhurst/matches').then(s=>{if(!DEMO_MODE&&!s.val()){const o={};SEED_MATCHES.forEach(m=>{o[m.id]=m;});fbSet('sandhurst/matches',o);}});
+    fbGet('sandhurst/settings').then(s=>{if(!DEMO_MODE&&!s.val())fbSet('sandhurst/settings',DEF_SETTINGS);});
+  }
   // Separate listeners per path - no single root listener
   const noRe=['login','pin','register','pending'];
-  window._onValue(window._ref(window._db,'sandhurst/users'),s=>{DB.users=s.val()||{};if(!noRe.includes(UI.screen))render();});
-  window._onValue(window._ref(window._db,'sandhurst/matches'),s=>{DB.matches=s.val()||{};DB.live=true;if(!DB.matches[UI.mid])UI.mid=Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;if(!noRe.includes(UI.screen))render();});
-  window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
-  window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/users'),s=>{if(DEMO_MODE)return;DB.users=s.val()||{};if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/matches'),s=>{if(DEMO_MODE)return;DB.matches=s.val()||{};DB.live=true;if(!DB.matches[UI.mid])UI.mid=Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{if(DEMO_MODE)return;DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{if(DEMO_MODE)return;const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
   // Avail and squad: one-time load, refresh on tab switch
-  function loadAvail(){fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});}
-  function loadSquad(){fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});}
-  loadAvail();loadSquad();
+  function loadAvail(){if(DEMO_MODE)return;fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});}
+  function loadSquad(){if(DEMO_MODE)return;fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});}
+  if(!DEMO_MODE){loadAvail();loadSquad();}
 }
 
 function refreshAvSq(){
+  if(DEMO_MODE)return;
   fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});
   fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});
 }
@@ -690,7 +695,7 @@ function rMem(app){
     if(d>0&&d<=DB.settings.reminderDays&&getAv(mid,SES.uid)==='none')
       h+='<div class="warn">⏰ Please mark your availability for vs '+m.opponent+' — '+d+' day'+(d===1?'':'s')+' to go!</div>';
     h+='<div class="sec">My availability</div><div class="sub">Only your own row is editable.</div>';
-    h+=mTabs('refreshAvSq();');
+    h+=mTabs(DEMO_MODE?'':'refreshAvSq();');
     if(m.id){
       h+=pillHtml(m);
       if(lk)h+='<div class="err-box">🔒 Availability locked '+DB.settings.lockDays+' days before the match.</div>';
@@ -761,14 +766,14 @@ function rMgr(app){
   h+='<div class="tab-bar">';
   tabs.forEach(function(t,i){
     const b=(i===3&&uc>0)?'<span class="nbadge">'+uc+'</span>':(i===4&&pend.length>0)?'<span class="nbadge">'+pend.length+'</span>':'';
-    const extra=(i===0||i===1)?'refreshAvSq();':'';
+    const extra=(i===0||i===1)&&!DEMO_MODE?'refreshAvSq();':'';
     h+='<button class="tab-btn'+(UI.tab===i?' sel':'')+'" onclick="UI.tab='+i+';'+extra+(i===3?'markRead();':'')+'render()">'+t+b+'</button>';
   });
   h+='</div>';
 
   if(UI.tab===0){
     h+='<div class="sec">Availability</div>';
-    h+=mTabs('refreshAvSq();');
+    h+=mTabs(DEMO_MODE?'':'refreshAvSq();');
     if(m.id){
       h+=pillHtml(m);
       if(isLk(mid))h+='<div class="err-box">🔒 Locked for members. You can still override.</div>';
@@ -783,7 +788,7 @@ function rMgr(app){
   }
   else if(UI.tab===1){
     const sq=getSq(mid);const avail=allP().filter(p=>['yes','maybe'].includes(getAv(mid,p.id)));const notSel=avail.filter(p=>!sq.includes(p.id));
-    h+='<div class="sec">Team selection</div>';h+=mTabs('refreshAvSq();');
+    h+='<div class="sec">Team selection</div>';h+=mTabs(DEMO_MODE?'':'refreshAvSq();');
     if(m.id){
       h+=pillHtml(m);
       h+='<div class="stats"><div class="stat"><div class="stat-n">'+sq.length+'</div><div class="stat-l">Selected</div></div><div class="stat"><div class="stat-n">'+Math.max(0,11-sq.length)+'</div><div class="stat-l">Spots left</div></div><div class="stat"><div class="stat-n">'+avail.length+'</div><div class="stat-l">Available</div></div></div>';
