@@ -218,6 +218,7 @@ const unread=()=>DB.notifs.filter(n=>{
 }).length;
 
 function saveMatchScroll(el){try{sessionStorage.setItem('ms_scroll',el.scrollLeft);}catch(e){}}
+function restoreMatchScroll(){const el=document.querySelector('.match-scroll');try{const v=sessionStorage.getItem('ms_scroll');if(el&&v)el.scrollLeft=parseInt(v);}catch(e){}}
 function toast(msg){
   const el=document.getElementById('toast');
   el.textContent=msg;el.classList.add('show');
@@ -439,12 +440,6 @@ function tbar(){
 function mTabs(onSwitch){
   const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));
   if(!ml.length)return '<div style="color:#bbb;font-size:13px;margin-bottom:14px">No matches yet.</div>';
-  // Restore scroll position after render
-  const scrollKey='ms_scroll';
-  setTimeout(function(){
-    const el=document.querySelector('.match-scroll');
-    if(el&&sessionStorage.getItem(scrollKey))el.scrollLeft=parseInt(sessionStorage.getItem(scrollKey));
-  },10);
   let h='<div class="match-scroll" onscroll="saveMatchScroll(this)">';
   ml.forEach(m=>{
     const cls=m.venue==='Home'?'home':'away';
@@ -655,6 +650,7 @@ function rMem(app){
     h+='</div>';
   }
   app.innerHTML=h;
+  restoreMatchScroll();
   renderAvailList(mid);
   setTimeout(function(){markRead();},1000);
 }
@@ -778,6 +774,7 @@ function rMgr(app){
   }
 
   app.innerHTML=h;
+  restoreMatchScroll();
   if((UI.tab===0||UI.tab===1)&&m.id)renderAvailList(mid);
 }
 
