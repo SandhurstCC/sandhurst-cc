@@ -68,12 +68,12 @@ label{display:block;font-size:13px;color:#888;margin-bottom:5px}
 .tab-btn{flex-shrink:0;padding:7px 14px;border-radius:10px;border:1px solid #ddd;font-size:13px;font-weight:500;color:#888;background:#fafafa;position:relative;touch-action:manipulation}
 .tab-btn.sel{background:#1a5c2e;color:#fff;border-color:#1a5c2e}
 .nbadge{position:absolute;top:-5px;right:-5px;background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center}
-.bat-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid #c8dfc8;background:#f4f9f4;touch-action:none;user-select:none}
+.bat-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid #c8dfc8;background:#f4f9f4;touch-action:pan-y;user-select:none}
 .bat-row.drag-over{border-color:#1a5c2e;border-style:dashed;background:#e0f0e6}
 .add-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid #eee;background:#fff;touch-action:manipulation}
 .bnum{width:26px;height:26px;border-radius:50%;background:#e6f1fb;color:#185fa5;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .bnum.on{background:#1a5c2e;color:#fff}
-.dh{color:#ccc;font-size:18px;padding:0 3px;flex-shrink:0;cursor:grab;user-select:none}
+.dh{color:#ccc;font-size:18px;padding:0 3px;flex-shrink:0;cursor:grab;user-select:none;touch-action:none}
 .warn{background:#faeeda;border:1px solid #fac775;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#854f0b}
 .err-box{background:#fcebeb;border:1px solid #f09595;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#a32d2d}
 .login-wrap{max-width:320px;margin:30px auto 0;padding:0 4px}
@@ -217,6 +217,7 @@ const unread=()=>DB.notifs.filter(n=>{
   return!n.read?.[k]&&(SES.role==='member'?n.target==='all'||n.target===SES.uid:n.target==='manager'||n.target==='all');
 }).length;
 
+function saveMatchScroll(el){try{sessionStorage.setItem('ms_scroll',el.scrollLeft);}catch(e){}}
 function toast(msg){
   const el=document.getElementById('toast');
   el.textContent=msg;el.classList.add('show');
@@ -438,7 +439,13 @@ function tbar(){
 function mTabs(onSwitch){
   const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));
   if(!ml.length)return '<div style="color:#bbb;font-size:13px;margin-bottom:14px">No matches yet.</div>';
-  let h='<div class="match-scroll">';
+  // Restore scroll position after render
+  const scrollKey='ms_scroll';
+  setTimeout(function(){
+    const el=document.querySelector('.match-scroll');
+    if(el&&sessionStorage.getItem(scrollKey))el.scrollLeft=parseInt(sessionStorage.getItem(scrollKey));
+  },10);
+  let h='<div class="match-scroll" onscroll="saveMatchScroll(this)">';
   ml.forEach(m=>{
     const cls=m.venue==='Home'?'home':'away';
     const sel=UI.mid===m.id?'sel':'';
