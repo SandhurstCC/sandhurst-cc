@@ -649,6 +649,21 @@ function rMem(app){
     myN.slice(0,10).forEach(n=>{const u=!n.read?.[SES.uid];h+='<div class="notif-row"><div class="ndot'+(u?'':' r')+'"></div><div style="flex:1;font-size:13px'+(u?';font-weight:600':'')+'">'+n.text+'</div><div style="font-size:11px;color:#bbb;white-space:nowrap">'+ago(n.ts)+'</div></div>';});
     h+='</div>';
   }
+  h+='<div class="sec" style="margin-top:4px">Help</div>'
+    +'<div class="card">'
+    +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">📱 Install as an app</div>'
+    +'<div style="font-size:13px;color:#555;line-height:1.6">'
+    +'<b>iPhone:</b> Open in Safari → tap Share (box with arrow) → <b>Add to Home Screen</b>.<br><br>'
+    +'<b>Android:</b> Open in Chrome → three-dot menu → <b>Add to Home Screen</b>.'
+    +'</div></div>'
+    +'<div class="card">'
+    +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">📋 How to use</div>'
+    +'<div style="font-size:13px;color:#555;line-height:1.6">'
+    +'<b>Availability</b> — Tap a match at the top to switch between fixtures. Tap <b>Yes</b>, <b>Maybe</b> or <b>No</b> on your own row. Other players are shown read-only so you can see who else is available.<br><br>'
+    +'<b>Profile</b> — Update your display name or change your PIN at any time.<br><br>'
+    +'<b>Notifications</b> — See match updates and availability reminders from your manager.<br><br>'
+    +'<b>Availability lock</b> — Your manager sets a cut-off before each match (usually 3 days). After that your availability is locked 🔒 and cannot be changed.'
+    +'</div></div>';
   app.innerHTML=h;
   restoreMatchScroll();
   renderAvailList(mid);
@@ -659,7 +674,7 @@ function rMem(app){
 function rMgr(app){
   const mid=UI.mid;const m=getM(mid);const isRO=SES.role==='readonly';
   const pend=pendP();const uc=unread();
-  const tabs=['Availability','Team','Matches','Notifications','Players','Export','Settings'];
+  const tabs=['Availability','Team','Matches','Notifications','Players','Export','Settings','Help'];
   let h=tbar();
   h+='<div class="tab-bar">';
   tabs.forEach(function(t,i){
@@ -762,6 +777,36 @@ function rMgr(app){
     h+='<div class="sec">Export</div>';h+=mTabs();
     if(m.id)h+=pillHtml(m);
     h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn primary" onclick="doXL()">Season Excel</button><button class="btn blue" onclick="doPDF(\''+mid+'\')">Team PDF</button></div><div style="font-size:12px;color:#aaa">Excel: all players × all matches with totals.<br>PDF: selected XI, batting order, club watermark.</div>';
+  }
+  else if(UI.tab===7){
+    h+='<div class="sec">Help &amp; Guide</div>';
+    h+='<div class="card">'
+      +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">📱 Install as an app</div>'
+      +'<div style="font-size:13px;color:#555;line-height:1.6">'
+      +'<b>iPhone/iPad:</b> Open this page in Safari, tap the Share button (box with arrow), scroll down and tap <b>Add to Home Screen</b>. The app will appear on your home screen like a native app.<br><br>'
+      +'<b>Android:</b> Open in Chrome, tap the three-dot menu, tap <b>Add to Home Screen</b>.<br><br>'
+      +'<b>Desktop:</b> Open in Chrome, click the install icon in the address bar, or use the three-dot menu → <b>Save and share → Install page as app</b>.'
+      +'</div></div>'
+      +'<div class="card">'
+      +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">🚀 Getting started</div>'
+      +'<div style="font-size:13px;color:#555;line-height:1.6">'
+      +'1. <b>Add your players</b> — go to Players tab and use the Add Player form. Each player gets PIN 1000 and must change it on first login.<br><br>'
+      +'2. <b>Add your fixtures</b> — go to Matches tab and add each game with opponent, date, time and home/away.<br><br>'
+      +'3. <b>Share the app link</b> — send players: <span style="font-family:monospace;background:#f4f4f2;padding:2px 6px;border-radius:4px;font-size:12px">https://sandhurstcc.github.io/sandhurst-cc</span><br><br>'
+      +'4. <b>Players log in</b> with their name and PIN 1000, then set a personal PIN.<br><br>'
+      +'5. <b>Players mark availability</b> on the Availability screen for each match.'
+      +'</div></div>'
+      +'<div class="card">'
+      +'<div style="font-size:14px;font-weight:600;color:#1a5c2e;margin-bottom:8px">📋 Manager tabs explained</div>'
+      +'<div style="font-size:13px;color:#555;line-height:1.6">'
+      +'<b>Availability</b> — See and override all player availability for each match. Stats show totals at a glance.<br><br>'
+      +'<b>Team</b> — Select your XI from available players. Drag the ⠿ handle to set batting order. Only players who marked available or maybe are shown.<br><br>'
+      +'<b>Matches</b> — Add, edit or remove fixtures. Changes send a notification to all players.<br><br>'
+      +'<b>Notifications</b> — See all availability changes and match updates.<br><br>'
+      +'<b>Players</b> — Add players directly, approve/reject self-registrations, view the full squad.<br><br>'
+      +'<b>Export</b> — Download a full season spreadsheet (Excel) or a team sheet PDF for the selected match.<br><br>'
+      +'<b>Settings</b> — Set how many days before a match availability locks, and when reminder notifications fire.'
+      +'</div></div>';
   }
   else if(UI.tab===6){
     h+='<div class="sec">Settings</div><div class="sub">Changes apply immediately.</div>'
