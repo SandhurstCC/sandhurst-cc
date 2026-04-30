@@ -498,8 +498,108 @@ function saveSt(){const rd=parseInt(document.getElementById('s-r')?document.getE
 
 // ── EXPORTS ───────────────────────────────────────────────────────────────────
 function doXL(){if(!window.XLSX){toast('Loading...');return;}const pl=allP();const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));const hdr=['Player',...ml.map(m=>m.opponent+'\n'+fmtD(m.date)),'Played','Available','Unavailable'];const rows=[hdr];pl.forEach(p=>{const cells=ml.map(m=>{if(getSq(m.id).includes(p.id))return'Played';const av=getAv(m.id,p.id);return av==='yes'?'Available':av==='maybe'?'Maybe':av==='no'?'Unavailable':'-';});rows.push([p.name,...cells,ml.filter(m=>getSq(m.id).includes(p.id)).length,ml.filter(m=>['yes','maybe'].includes(getAv(m.id,p.id))).length,ml.filter(m=>getAv(m.id,p.id)==='no').length]);});rows.push([],['Totals',...ml.map(m=>getSq(m.id).length+' played'),'','','']);const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:20},...ml.map(()=>({wch:18})),{wch:8},{wch:10},{wch:12}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Season');XLSX.writeFile(wb,'SandhurstCC.xlsx');}
-function doPDF(mid){if(!window.jspdf){toast('Loading...');return;}const{jsPDF}=window.jspdf;const doc=new jsPDF();const match=getM(mid);const sq=getSq(mid);const pw=doc.internal.pageSize.getWidth();const ph=doc.internal.pageSize.getHeight();function buildPDF(){try{const img=new Image();img.src=LOGO;doc.setGState(doc.GState({opacity:0.07}));doc.addImage(img,'JPEG',pw/2-50,ph/2-50,100,100);doc.setGState(doc.GState({opacity:1}));doc.addImage(img,'JPEG',14,8,22,22);}catch(e){}doc.setTextColor(26,92,46);doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('Sandhurst Cricket Club',40,18);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(80,80,80);doc.text('vs '+match.opponent+'  ·  '+fmtD(match.date)+' '+(match.time||'')+'  ·  '+match.venue,40,26);doc.text('Generated: '+new Date().toLocaleDateString('en-GB'),40,32);doc.setDrawColor(26,92,46);doc.setLineWidth(0.5);doc.line(14,36,pw-14,36);let y=48;doc.setFillColor(26,92,46);doc.rect(14,y-7,pw-28,9,'F');doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('#',16,y);doc.text('Player',26,y);doc.text('Notes',155,y);y+=11;if(!sq.length){doc.setTextColor(180,180,180);doc.setFont('helvetica','normal');doc.text('No players selected yet.',16,y+6);}else{sq.forEach((uid,i)=>{const p=DB.users[uid];if(!p)return;if(i%2===0){doc.setFillColor(244,249,244);doc.rect(14,y-6,pw-28,10,'F');}doc.setTextColor(30,30,30);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(String(i+1),16,y);doc.text(p.name,26,y);const notes=[];if(p.captain)notes.push('Captain');if(p.keeper)notes.push('Wicketkeeper');if(notes.length)doc.text(notes.join(' · '),155,y);y+=10;});}doc.setDrawColor(26,92,46);doc.line(14,y+4,pw-14,y+4);doc.setTextColor(180,180,180);doc.setFontSize(8);doc.text('Sandhurst Cricket Club · Est. 1949 · Kent',pw/2,ph-8,{align:'center'});doc.save('SandhurstCC_vs_'+match.opponent.replace(/\s/g,'_')+'.pdf');}
-buildPDF();}
+function doPDF(mid){
+  if(!window.jspdf){toast('Loading...');return;}
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const match=getM(mid);
+  const sq=getSq(mid);
+  const pw=doc.internal.pageSize.getWidth();   // 210
+  const ph=doc.internal.pageSize.getHeight();  // 297
+  const cx=pw/2;
+
+  // ── watermark logo ────────────────────────────────────────────────────────
+  try{
+    const img=new Image();img.src=LOGO;
+    doc.setGState(doc.GState({opacity:0.08}));
+    doc.addImage(img,'JPEG',cx-55,ph/2-80,110,110);
+    doc.setGState(doc.GState({opacity:1}));
+  }catch(e){}
+
+  // ── header: club name ─────────────────────────────────────────────────────
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(22);
+  doc.setTextColor(26,92,46);
+  doc.text('SANDHURST C.C. KENT',cx,22,{align:'center'});
+
+  // ── vs line ───────────────────────────────────────────────────────────────
+  doc.setFontSize(14);
+  doc.setTextColor(30,30,30);
+  doc.text('vs. '+match.opponent.toUpperCase(),cx,33,{align:'center'});
+  doc.setLineWidth(0.6);
+  doc.setDrawColor(30,30,30);
+  // underline the vs line
+  const vsW=doc.getTextWidth('vs. '+match.opponent.toUpperCase());
+  doc.line(cx-vsW/2,34.5,cx+vsW/2,34.5);
+
+  // ── date / time / venue ───────────────────────────────────────────────────
+  const dayNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const dateObj=match.date?new Date(match.date+'T12:00:00'):null;
+  const dayStr=dateObj?dayNames[dateObj.getDay()]+' '+fmtD(match.date):'TBC';
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.setTextColor(30,30,30);
+  doc.text(dayStr.toUpperCase(),cx,42,{align:'center'});
+  if(match.time){
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(9);
+    doc.text('START: '+match.time,cx,49,{align:'center'});
+  }
+  if(match.venue){
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.setTextColor(26,92,46);
+    doc.text(match.venue==='Home'?'THE GREEN, SANDHURST, KENT':match.venue.toUpperCase(),cx,56,{align:'center'});
+  }
+
+  // ── divider ───────────────────────────────────────────────────────────────
+  doc.setDrawColor(180,180,180);
+  doc.setLineWidth(0.3);
+  doc.line(20,60,pw-20,60);
+
+  // ── STARTING XI header ────────────────────────────────────────────────────
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(15);
+  doc.setTextColor(30,30,30);
+  doc.text('STARTING XI',cx,70,{align:'center'});
+
+  // ── player list ───────────────────────────────────────────────────────────
+  let y=82;
+  const lineH=13;
+  if(!sq.length){
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(11);
+    doc.setTextColor(180,180,180);
+    doc.text('No players selected yet.',cx,y,{align:'center'});
+  } else {
+    sq.forEach((uid,i)=>{
+      const p=DB.users[uid];if(!p)return;
+      // suffix: (C) for captain, (W) or (WK) for keeper
+      let suffix='';
+      if(p.captain&&p.keeper)suffix=' (C/W)';
+      else if(p.captain)suffix=' (C)';
+      else if(p.keeper)suffix=' (W)';
+      const nameStr=(i+1)+'.  '+p.name.toUpperCase()+suffix;
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(13);
+      doc.setTextColor(30,30,30);
+      doc.text(nameStr,cx,y,{align:'center'});
+      y+=lineH;
+    });
+  }
+
+  // ── footer ────────────────────────────────────────────────────────────────
+  doc.setDrawColor(180,180,180);
+  doc.setLineWidth(0.3);
+  doc.line(20,ph-28,pw-20,ph-28);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(7);
+  doc.setTextColor(150,150,150);
+  doc.text('Sandhurst Cricket Club · Est. 1949 · Kent',cx,ph-22,{align:'center'});
+  doc.text('Generated '+new Date().toLocaleDateString('en-GB'),cx,ph-17,{align:'center'});
+
+  doc.save('SandhurstCC_vs_'+match.opponent.replace(/\s/g,'_')+'.pdf');
+}
 
 // ── RENDER HELPERS ────────────────────────────────────────────────────────────
 const lImg=sz=>'<img src="'+LOGO+'" style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;object-fit:cover;flex-shrink:0">';
