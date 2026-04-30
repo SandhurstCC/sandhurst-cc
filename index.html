@@ -530,7 +530,7 @@ function doPDF(mid){
   const match=getM(mid);const sq=getSq(mid);
   const pw=doc.internal.pageSize.getWidth();const ph=doc.internal.pageSize.getHeight();const cx=pw/2;
   try{const img=new Image();img.src=LOGO;doc.setGState(doc.GState({opacity:0.08}));doc.addImage(img,'JPEG',cx-55,ph/2-80,110,110);doc.setGState(doc.GState({opacity:1}));}catch(e){}
-  doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(26,92,46);
+  doc.setFont('times','bold');doc.setFontSize(22);doc.setTextColor(26,92,46);
   doc.text('SANDHURST C.C. KENT',cx,22,{align:'center'});
   const vsStr='vs. '+match.opponent.toUpperCase();
   doc.setFontSize(14);doc.setTextColor(30,30,30);doc.text(vsStr,cx,33,{align:'center'});
@@ -538,32 +538,32 @@ function doPDF(mid){
   const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const dateObj=match.date?new Date(match.date+'T12:00:00'):null;
   const dayStr=dateObj?days[dateObj.getDay()]+' '+fmtD(match.date):'TBC';
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(30,30,30);
+  doc.setFont('times','normal');doc.setFontSize(10);doc.setTextColor(30,30,30);
   doc.text(dayStr.toUpperCase(),cx,42,{align:'center'});
-  if(match.time){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('START: '+match.time,cx,49,{align:'center'});}
+  if(match.time){doc.setFont('times','bold');doc.setFontSize(9);doc.text('START: '+match.time,cx,49,{align:'center'});}
   const addr=match.address&&match.address.trim()?match.address:(match.venue==='Home'?'The Green, Sandhurst, Kent':'');
-  if(addr){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(26,92,46);doc.text(addr.toUpperCase(),cx,56,{align:'center'});}
+  if(addr){doc.setFont('times','normal');doc.setFontSize(9);doc.setTextColor(26,92,46);doc.text(addr.toUpperCase(),cx,56,{align:'center'});}
   doc.setDrawColor(180,180,180);doc.setLineWidth(0.3);doc.line(20,61,pw-20,61);
-  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(30,30,30);doc.text('STARTING XI',cx,71,{align:'center'});
+  doc.setFont('times','bold');doc.setFontSize(15);doc.setTextColor(30,30,30);doc.text('STARTING XI',cx,71,{align:'center'});
   let y=83;const lineH=13;
-  if(!sq.length){doc.setFont('helvetica','normal');doc.setFontSize(11);doc.setTextColor(180,180,180);doc.text('No players selected yet.',cx,y,{align:'center'});}
+  if(!sq.length){doc.setFont('times','normal');doc.setFontSize(11);doc.setTextColor(180,180,180);doc.text('No players selected yet.',cx,y,{align:'center'});}
   else{sq.forEach((uid,i)=>{
     const p=DB.users[uid];if(!p)return;
     const parts=p.name.trim().split(/\s+/);
     const display=parts.length>1?parts[0]+' '+parts[parts.length-1][0]:parts[0];
     let sfx='';if(p.captain&&p.keeper)sfx=' (C/WK)';else if(p.captain)sfx=' (C)';else if(p.keeper)sfx=' (WK)';
-    doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(30,30,30);
+    doc.setFont('times','bold');doc.setFontSize(13);doc.setTextColor(30,30,30);
     doc.text((i+1)+'.  '+display.toUpperCase()+sfx,cx,y,{align:'center'});y+=lineH;
   });}
   // Woodcock Inn sponsor footer
   doc.setDrawColor(180,180,180);doc.setLineWidth(0.3);doc.line(20,ph-46,pw-20,ph-46);
-  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(150,150,150);
+  doc.setFont('times','normal');doc.setFontSize(8);doc.setTextColor(150,150,150);
   doc.text('RED BALL SPONSOR FOR 2026',cx,ph-39,{align:'center'});
-  doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(30,30,30);
+  doc.setFont('times','bold');doc.setFontSize(14);doc.setTextColor(30,30,30);
   doc.text('THE WOODCOCK INN',cx,ph-29,{align:'center'});
-  doc.setFont('helvetica','normal');doc.setFontSize(11);doc.setTextColor(30,30,30);
+  doc.setFont('times','normal');doc.setFontSize(11);doc.setTextColor(30,30,30);
   doc.text('IDEN GREEN',cx,ph-20,{align:'center'});
-  doc.setFont('helvetica','normal');doc.setFontSize(6);doc.setTextColor(180,180,180);
+  doc.setFont('times','normal');doc.setFontSize(6);doc.setTextColor(180,180,180);
   doc.text('Sandhurst Cricket Club · Est. 1949 · Kent',cx,ph-11,{align:'center'});
   doc.save('SandhurstCC_vs_'+match.opponent.replace(/\s/g,'_')+'.pdf');
 }
