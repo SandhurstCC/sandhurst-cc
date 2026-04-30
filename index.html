@@ -547,10 +547,24 @@ function doPDF(mid){
   doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(30,30,30);doc.text('STARTING XI',cx,71,{align:'center'});
   let y=83;const lineH=13;
   if(!sq.length){doc.setFont('helvetica','normal');doc.setFontSize(11);doc.setTextColor(180,180,180);doc.text('No players selected yet.',cx,y,{align:'center'});}
-  else{sq.forEach((uid,i)=>{const p=DB.users[uid];if(!p)return;let sfx='';if(p.captain&&p.keeper)sfx=' (C/W)';else if(p.captain)sfx=' (C)';else if(p.keeper)sfx=' (W)';doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(30,30,30);doc.text((i+1)+'.  '+p.name.toUpperCase()+sfx,cx,y,{align:'center'});y+=lineH;});}
-  doc.setDrawColor(180,180,180);doc.setLineWidth(0.3);doc.line(20,ph-24,pw-20,ph-24);
-  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(150,150,150);
-  doc.text('Sandhurst Cricket Club · Est. 1949 · Kent',cx,ph-17,{align:'center'});
+  else{sq.forEach((uid,i)=>{
+    const p=DB.users[uid];if(!p)return;
+    const parts=p.name.trim().split(/\s+/);
+    const display=parts.length>1?parts[0]+' '+parts[parts.length-1][0]:parts[0];
+    let sfx='';if(p.captain&&p.keeper)sfx=' (C/WK)';else if(p.captain)sfx=' (C)';else if(p.keeper)sfx=' (WK)';
+    doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(30,30,30);
+    doc.text((i+1)+'.  '+display.toUpperCase()+sfx,cx,y,{align:'center'});y+=lineH;
+  });}
+  // Woodcock Inn sponsor footer
+  doc.setDrawColor(180,180,180);doc.setLineWidth(0.3);doc.line(20,ph-46,pw-20,ph-46);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(150,150,150);
+  doc.text('RED BALL SPONSOR FOR 2026',cx,ph-39,{align:'center'});
+  doc.setFont('helvetica','bold');doc.setFontSize(14);doc.setTextColor(30,30,30);
+  doc.text('THE WOODCOCK INN',cx,ph-29,{align:'center'});
+  doc.setFont('helvetica','normal');doc.setFontSize(11);doc.setTextColor(30,30,30);
+  doc.text('IDEN GREEN',cx,ph-20,{align:'center'});
+  doc.setFont('helvetica','normal');doc.setFontSize(6);doc.setTextColor(180,180,180);
+  doc.text('Sandhurst Cricket Club · Est. 1949 · Kent',cx,ph-11,{align:'center'});
   doc.save('SandhurstCC_vs_'+match.opponent.replace(/\s/g,'_')+'.pdf');
 }
 const lImg=sz=>'<img src="'+LOGO+'" style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;object-fit:cover;flex-shrink:0">';
