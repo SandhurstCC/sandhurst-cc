@@ -491,25 +491,12 @@ function savePinCh(){const c=(document.getElementById('f-pc')?document.getElemen
 // ── MATCHES ───────────────────────────────────────────────────────────────────
 function saveM(mid){const o=(document.getElementById('eo-'+mid)?document.getElementById('eo-'+mid).value:'').trim();const d=document.getElementById('ed-'+mid)?document.getElementById('ed-'+mid).value:'';const t=document.getElementById('et-'+mid)?document.getElementById('et-'+mid).value:'13:00';const v=document.getElementById('ev-'+mid)?document.getElementById('ev-'+mid).value:'Home';if(!o||!d){toast('Enter opponent and date');return;}const old=getM(mid);if(old.opponent!==o||old.date!==d||old.time!==t||old.venue!==v)addNotif('Match updated: vs '+o+' — '+fmtD(d)+' at '+t+' ('+v+')','all',mid,'match');const a=(document.getElementById('ea-'+mid)?document.getElementById('ea-'+mid).value:'').trim();fbSet('sandhurst/matches/'+mid,{id:mid,opponent:o,date:d,time:t,venue:v,address:a});toast('Match saved');}
 function addM(){const o=(document.getElementById('nm-o')?document.getElementById('nm-o').value:'').trim();const d=document.getElementById('nm-d')?document.getElementById('nm-d').value:'';const t=document.getElementById('nm-t')?document.getElementById('nm-t').value:'13:00';const v=document.getElementById('nm-v')?document.getElementById('nm-v').value:'Home';if(!o||!d){toast('Enter opponent and date');return;}const id='m'+Date.now();const a=(document.getElementById('nm-a')?document.getElementById('nm-a').value:'').trim();fbSet('sandhurst/matches/'+id,{id,opponent:o,date:d,time:t,venue:v,address:a});addNotif('New match: vs '+o+' — '+fmtD(d)+' at '+t+' ('+v+')','all',id,'match');UI.mid=id;toast('Match added');render();}
-async function lookupAddress(mid){
+function lookupAddress(mid){
   const oppEl=document.getElementById(mid?'eo-'+mid:'nm-o');
-  const addrEl=document.getElementById(mid?'ea-'+mid:'nm-a');
-  if(!oppEl||!addrEl)return;
-  const opp=oppEl.value.trim();
-  if(!opp){toast('Enter opponent name first');return;}
-  const btn=document.getElementById('lookup-btn-'+(mid||'new'));
-  if(btn){btn.textContent='Searching...';btn.disabled=true;}
-  try{
-    const q=encodeURIComponent(opp+' cricket club');
-    const res=await fetch('https://nominatim.openstreetmap.org/search?q='+q+'&format=json&limit=1&countrycodes=gb',{headers:{'Accept-Language':'en'}});
-    const data=await res.json();
-    if(data&&data.length>0){
-      const parts=data[0].display_name.split(',').map(s=>s.trim()).filter(Boolean);
-      addrEl.value=parts.slice(0,4).join(', ');
-      toast('✓ Address found — check and edit if needed');
-    }else toast('No result — enter address manually');
-  }catch(e){toast('Lookup failed — enter manually');}
-  if(btn){btn.textContent='🔍 Lookup';btn.disabled=false;}
+  if(!oppEl||!oppEl.value.trim()){toast('Enter opponent name first');return;}
+  const q=encodeURIComponent(oppEl.value.trim()+' cricket club');
+  window.open('https://www.google.com/maps/search/'+q,'_blank');
+  toast('Copy the address from Google Maps into the field below');
 }
 function delM(mid){if(!confirm('Remove match?'))return;fbSet('sandhurst/matches/'+mid,null);const r=Object.keys(DB.matches).filter(k=>k!==mid);UI.mid=r[0]||'';}
 
