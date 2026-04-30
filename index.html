@@ -314,7 +314,8 @@ function initFB(){
   if(!DEMO_MODE&&!window._seeded){
     window._seeded=true;
     fbGet('sandhurst/users').then(s=>{if(!DEMO_MODE&&!s.val()){const o={};SEEDS.forEach(u=>{o[u.id]=u;});fbSet('sandhurst/users',o);}});
-    fbGet('sandhurst/matches').then(s=>{if(!DEMO_MODE&&!s.val()){const o={};SEED_MATCHES.forEach(m=>{o[m.id]=m;});fbSet('sandhurst/matches',o);}});
+    // Merge: only write fixtures that don't already exist in Firebase
+    fbGet('sandhurst/matches').then(s=>{if(DEMO_MODE)return;const ex=s.val()||{};SEED_MATCHES.forEach(m=>{if(!ex[m.id])fbSet('sandhurst/matches/'+m.id,m);});});
     fbGet('sandhurst/settings').then(s=>{if(!DEMO_MODE&&!s.val())fbSet('sandhurst/settings',DEF_SETTINGS);});
   }
   const noRe=['login','pin','register','pending'];
