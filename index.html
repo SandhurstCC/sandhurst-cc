@@ -489,8 +489,29 @@ function saveName(){const n=(document.getElementById('f-nn')?document.getElement
 function savePinCh(){const c=(document.getElementById('f-pc')?document.getElementById('f-pc').value:'').trim();const np=(document.getElementById('f-pn')?document.getElementById('f-pn').value:'').trim();const cf=(document.getElementById('f-pf')?document.getElementById('f-pf').value:'').trim();if(hp(c)!==SES.pin){toast('Current PIN incorrect');return;}if(np.length<4){toast('4+ digits required');return;}if(np!==cf){toast('PINs do not match');return;}if(np==='1000'){toast('Choose a different PIN');return;}const h2=hp(np);updPin(h2,false);fbSet('sandhurst/users/'+SES.uid+'/pin',h2);toast('PIN changed');render();}
 
 // ── MATCHES ───────────────────────────────────────────────────────────────────
-function saveM(mid){const o=(document.getElementById('eo-'+mid)?document.getElementById('eo-'+mid).value:'').trim();const d=document.getElementById('ed-'+mid)?document.getElementById('ed-'+mid).value:'';const t=document.getElementById('et-'+mid)?document.getElementById('et-'+mid).value:'13:00';const v=document.getElementById('ev-'+mid)?document.getElementById('ev-'+mid).value:'Home';if(!o||!d){toast('Enter opponent and date');return;}const old=getM(mid);if(old.opponent!==o||old.date!==d||old.time!==t||old.venue!==v)addNotif('Match updated: vs '+o+' — '+fmtD(d)+' at '+t+' ('+v+')','all',mid,'match');fbSet('sandhurst/matches/'+mid,{id:mid,opponent:o,date:d,time:t,venue:v});toast('Match saved');}
-function addM(){const o=(document.getElementById('nm-o')?document.getElementById('nm-o').value:'').trim();const d=document.getElementById('nm-d')?document.getElementById('nm-d').value:'';const t=document.getElementById('nm-t')?document.getElementById('nm-t').value:'13:00';const v=document.getElementById('nm-v')?document.getElementById('nm-v').value:'Home';if(!o||!d){toast('Enter opponent and date');return;}const id='m'+Date.now();fbSet('sandhurst/matches/'+id,{id,opponent:o,date:d,time:t,venue:v});addNotif('New match: vs '+o+' — '+fmtD(d)+' at '+t+' ('+v+')','all',id,'match');UI.mid=id;toast('Match added');render();}
+function saveM(mid){const o=(document.getElementById('eo-'+mid)?document.getElementById('eo-'+mid).value:'').trim();const d=document.getElementById('ed-'+mid)?document.getElementById('ed-'+mid).value:'';const t=document.getElementById('et-'+mid)?document.getElementById('et-'+mid).value:'13:00';const v=document.getElementById('ev-'+mid)?document.getElementById('ev-'+mid).value:'Home';const a=(document.getElementById('ea-'+mid)?document.getElementById('ea-'+mid).value:'').trim();if(!o||!d){toast('Enter opponent and date');return;}const old=getM(mid);if(old.opponent!==o||old.date!==d||old.time!==t||old.venue!==v)addNotif('Match updated: vs '+o+' — '+fmtD(d)+' at '+t+' ('+v+')','all',mid,'match');fbSet('sandhurst/matches/'+mid,{id:mid,opponent:o,date:d,time:t,venue:v,address:a});toast('Match saved');}
+function addM(){const o=(document.getElementById('nm-o')?document.getElementById('nm-o').value:'').trim();const d=document.getElementById('nm-d')?document.getElementById('nm-d').value:'';const t=document.getElementById('nm-t')?document.getElementById('nm-t').value:'13:00';const v=document.getElementById('nm-v')?document.getElementById('nm-v').value:'Home';const a=(document.getElementById('nm-a')?document.getElementById('nm-a').value:'').trim();if(!o||!d){toast('Enter opponent and date');return;}const id='m'+Date.now();fbSet('sandhurst/matches/'+id,{id,opponent:o,date:d,time:t,venue:v,address:a});addNotif('New match: vs '+o+' — '+fmtD(d)+' at '+t+' ('+v+')','all',id,'match');UI.mid=id;toast('Match added');render();}
+
+async function lookupAddress(mid){
+  const oppEl=document.getElementById(mid?'eo-'+mid:'nm-o');
+  const addrEl=document.getElementById(mid?'ea-'+mid:'nm-a');
+  if(!oppEl||!addrEl)return;
+  const opp=oppEl.value.trim();
+  if(!opp){toast('Enter opponent name first');return;}
+  const btn=document.getElementById('lookup-btn-'+(mid||'new'));
+  if(btn){btn.textContent='Searching...';btn.disabled=true;}
+  try{
+    const q=encodeURIComponent(opp+' cricket club');
+    const res=await fetch('https://nominatim.openstreetmap.org/search?q='+q+'&format=json&limit=1&countrycodes=gb',{headers:{'Accept-Language':'en'}});
+    const data=await res.json();
+    if(data&&data.length>0){
+      const parts=data[0].display_name.split(',').map(s=>s.trim()).filter(Boolean);
+      addrEl.value=parts.slice(0,4).join(', ');
+      toast('✓ Address found — check and edit if needed');
+    }else toast('No result — enter address manually');
+  }catch(e){toast('Lookup failed — enter manually');}
+  if(btn){btn.textContent='🔍 Lookup';btn.disabled=false;}
+}
 function delM(mid){if(!confirm('Remove match?'))return;fbSet('sandhurst/matches/'+mid,null);const r=Object.keys(DB.matches).filter(k=>k!==mid);UI.mid=r[0]||'';}
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
@@ -502,121 +523,575 @@ function doPDF(mid){
   if(!window.jspdf){toast('Loading...');return;}
   const{jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const match=getM(mid);
-  const sq=getSq(mid);
-  const pw=doc.internal.pageSize.getWidth();   // 210
-  const ph=doc.internal.pageSize.getHeight();  // 297
-  const cx=pw/2;
-
-  // ── watermark logo ────────────────────────────────────────────────────────
-  try{
-    const img=new Image();img.src=LOGO;
-    doc.setGState(doc.GState({opacity:0.08}));
-    doc.addImage(img,'JPEG',cx-55,ph/2-80,110,110);
-    doc.setGState(doc.GState({opacity:1}));
-  }catch(e){}
-
-  // ── header: club name ─────────────────────────────────────────────────────
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(22);
-  doc.setTextColor(26,92,46);
+  const match=getM(mid);const sq=getSq(mid);
+  const pw=doc.internal.pageSize.getWidth();const ph=doc.internal.pageSize.getHeight();const cx=pw/2;
+  // watermark
+  try{const img=new Image();img.src=LOGO;doc.setGState(doc.GState({opacity:0.08}));doc.addImage(img,'JPEG',cx-55,ph/2-80,110,110);doc.setGState(doc.GState({opacity:1}));}catch(e){}
+  // club name
+  doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(26,92,46);
   doc.text('SANDHURST C.C. KENT',cx,22,{align:'center'});
-
-  // ── vs line ───────────────────────────────────────────────────────────────
-  doc.setFontSize(14);
-  doc.setTextColor(30,30,30);
-  doc.text('vs. '+match.opponent.toUpperCase(),cx,33,{align:'center'});
-  doc.setLineWidth(0.6);
-  doc.setDrawColor(30,30,30);
-  // underline the vs line
-  const vsW=doc.getTextWidth('vs. '+match.opponent.toUpperCase());
-  doc.line(cx-vsW/2,34.5,cx+vsW/2,34.5);
-
-  // ── date / time / venue ───────────────────────────────────────────────────
+  // vs line
+  doc.setFontSize(14);doc.setTextColor(30,30,30);
+  const vsStr='vs. '+match.opponent.toUpperCase();
+  doc.text(vsStr,cx,33,{align:'center'});
+  const vsW=doc.getTextWidth(vsStr);
+  doc.setLineWidth(0.6);doc.setDrawColor(30,30,30);doc.line(cx-vsW/2,34.5,cx+vsW/2,34.5);
+  // date
   const dayNames=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const dateObj=match.date?new Date(match.date+'T12:00:00'):null;
   const dayStr=dateObj?dayNames[dateObj.getDay()]+' '+fmtD(match.date):'TBC';
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(10);
-  doc.setTextColor(30,30,30);
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(30,30,30);
   doc.text(dayStr.toUpperCase(),cx,42,{align:'center'});
-  if(match.time){
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(9);
-    doc.text('START: '+match.time,cx,49,{align:'center'});
-  }
-  if(match.venue){
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(9);
-    doc.setTextColor(26,92,46);
-    doc.text(match.venue==='Home'?'THE GREEN, SANDHURST, KENT':match.venue.toUpperCase(),cx,56,{align:'center'});
-  }
-
-  // ── divider ───────────────────────────────────────────────────────────────
-  doc.setDrawColor(180,180,180);
-  doc.setLineWidth(0.3);
-  doc.line(20,60,pw-20,60);
-
-  // ── STARTING XI header ────────────────────────────────────────────────────
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(15);
-  doc.setTextColor(30,30,30);
-  doc.text('STARTING XI',cx,70,{align:'center'});
-
-  // ── player list ───────────────────────────────────────────────────────────
-  let y=82;
-  const lineH=13;
+  // time
+  if(match.time){doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('START: '+match.time,cx,49,{align:'center'});}
+  // address
+  const addr=match.address&&match.address.trim()?match.address:(match.venue==='Home'?'The Green, Sandhurst, Kent':'');
+  if(addr){doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(26,92,46);doc.text(addr.toUpperCase(),cx,56,{align:'center'});}
+  // divider
+  doc.setDrawColor(180,180,180);doc.setLineWidth(0.3);doc.line(20,61,pw-20,61);
+  // STARTING XI
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(30,30,30);
+  doc.text('STARTING XI',cx,71,{align:'center'});
+  // players
+  let y=83;const lineH=13;
   if(!sq.length){
-    doc.setFont('helvetica','normal');
-    doc.setFontSize(11);
-    doc.setTextColor(180,180,180);
+    doc.setFont('helvetica','normal');doc.setFontSize(11);doc.setTextColor(180,180,180);
     doc.text('No players selected yet.',cx,y,{align:'center'});
-  } else {
+  }else{
     sq.forEach((uid,i)=>{
       const p=DB.users[uid];if(!p)return;
-      // suffix: (C) for captain, (W) or (WK) for keeper
-      let suffix='';
-      if(p.captain&&p.keeper)suffix=' (C/W)';
-      else if(p.captain)suffix=' (C)';
-      else if(p.keeper)suffix=' (W)';
-      const nameStr=(i+1)+'.  '+p.name.toUpperCase()+suffix;
-      doc.setFont('helvetica','bold');
-      doc.setFontSize(13);
-      doc.setTextColor(30,30,30);
-      doc.text(nameStr,cx,y,{align:'center'});
+      let sfx='';if(p.captain&&p.keeper)sfx=' (C/W)';else if(p.captain)sfx=' (C)';else if(p.keeper)sfx=' (W)';
+      doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(30,30,30);
+      doc.text((i+1)+'.  '+p.name.toUpperCase()+sfx,cx,y,{align:'center'});
       y+=lineH;
     });
   }
-
-  // ── footer ────────────────────────────────────────────────────────────────
-  doc.setDrawColor(180,180,180);
-  doc.setLineWidth(0.3);
-  doc.line(20,ph-28,pw-20,ph-28);
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(7);
-  doc.setTextColor(150,150,150);
-  doc.text('Sandhurst Cricket Club · Est. 1949 · Kent',cx,ph-22,{align:'center'});
-  doc.text('Generated '+new Date().toLocaleDateString('en-GB'),cx,ph-17,{align:'center'});
-
+  // footer
+  doc.setDrawColor(180,180,180);doc.setLineWidth(0.3);doc.line(20,ph-24,pw-20,ph-24);
+  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(150,150,150);
+  doc.text('Sandhurst Cricket Club · Est. 1949 · Kent',cx,ph-17,{align:'center'});
   doc.save('SandhurstCC_vs_'+match.opponent.replace(/\s/g,'_')+'.pdf');
+}tml>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#1a5c2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sandhurst CC">
+<link rel="manifest" href="manifest.json">
+<title>Sandhurst CC</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#f4f4f2;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;font-size:15px;color:#111}
+#app{max-width:520px;margin:0 auto;padding:12px 14px 80px;min-height:100vh}
+button{cursor:pointer;-webkit-appearance:none;touch-action:manipulation;font-family:inherit}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:10px 18px;border-radius:10px;border:1px solid #ccc;font-size:14px;font-weight:500;background:#fff;color:#333}
+.btn.full{width:100%;margin-bottom:8px}
+.btn.primary{background:#1a5c2e;color:#fff;border-color:#1a5c2e}
+.btn.blue{background:#185fa5;color:#fff;border-color:#185fa5}
+.btn.sm{padding:5px 12px;font-size:12px}
+.btn.ghost-red{background:#fff;color:#a32d2d;border-color:#f09595}
+.btn.icon-btn{background:none;border:none;color:#bbb;font-size:20px;padding:2px 8px}
+input,select{width:100%;padding:11px 13px;border:1px solid #ddd;border-radius:10px;font-size:15px;margin-bottom:10px;color:#111;background:#fff;-webkit-appearance:none;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:#1a5c2e}
+label{display:block;font-size:13px;color:#888;margin-bottom:5px}
+.card{background:#fff;border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:4px 0 14px}
+.topbar-left{display:flex;align-items:center;gap:10px}
+.club-name{font-size:16px;font-weight:700;color:#1a5c2e}
+.badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px}
+.badge-m{background:#e6f1fb;color:#185fa5}
+.badge-mgr{background:#d4eadc;color:#1a5c2e}
+.badge-ro{background:#faeeda;color:#854f0b}
+.sec{font-size:17px;font-weight:700;margin-bottom:4px}
+.sub{font-size:13px;color:#999;margin-bottom:14px}
+.av-c{width:34px;height:34px;border-radius:50%;background:#d4eadc;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#1a5c2e;flex-shrink:0}
+.p-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0f0}
+.p-row:last-child{border-bottom:none}
+.p-name{font-size:14px;font-weight:500;flex:1}
+.tog{padding:6px 11px;border-radius:8px;border:1px solid #e0e0e0;font-size:13px;font-weight:600;color:#aaa;background:#fafafa;touch-action:manipulation}
+.tog.ay{background:#d4eadc;border-color:#9fd4a4;color:#1a5c2e}
+.tog.an{background:#fcebeb;border-color:#f09595;color:#a32d2d}
+.tog.am{background:#faeeda;border-color:#fac775;color:#854f0b}
+.atag{font-size:11px;padding:3px 9px;border-radius:8px;font-weight:600;white-space:nowrap}
+.tag-y{background:#d4eadc;color:#1a5c2e}
+.tag-n{background:#fcebeb;color:#a32d2d}
+.tag-m{background:#faeeda;color:#854f0b}
+.tag-0{background:#f0f0f0;color:#999}
+.match-scroll{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:14px;scrollbar-width:auto;-webkit-overflow-scrolling:touch}
+@media(hover:hover){.match-scroll::-webkit-scrollbar{height:6px}.match-scroll::-webkit-scrollbar-track{background:#f0f0f0;border-radius:3px}.match-scroll::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}}
+
+.mtab{flex-shrink:0;padding:8px 14px;border-radius:10px;border:1.5px solid #ddd;font-size:12px;font-weight:500;color:#888;background:#fafafa;text-align:left;min-width:120px;touch-action:manipulation}
+.mtab.home{border-left:4px solid #1a5c2e}
+.mtab.away{border-left:4px solid #185fa5}
+.mtab.sel.home{background:#d4eadc;color:#1a5c2e;border-color:#9fd4a4;border-left-color:#1a5c2e}
+.mtab.sel.away{background:#e6f1fb;color:#185fa5;border-color:#b5d4f4;border-left-color:#185fa5}
+.pill{display:inline-flex;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:500;margin-bottom:14px}
+.pill.home{background:#f4f9f4;color:#1a5c2e;border:1px solid #c8dfc8}
+.pill.away{background:#e6f1fb;color:#185fa5;border:1px solid #b5d4f4}
+.stats{display:flex;gap:8px;margin-bottom:14px}
+.stat{flex:1;background:#f4f9f4;border-radius:10px;padding:10px;text-align:center}
+.stat-n{font-size:22px;font-weight:700;color:#1a5c2e}
+.stat-l{font-size:11px;color:#999;margin-top:2px}
+.tab-bar{display:flex;gap:5px;margin-bottom:14px;overflow-x:auto;scrollbar-width:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+@media(hover:hover){.tab-bar::-webkit-scrollbar{height:6px}.tab-bar::-webkit-scrollbar-track{background:#f0f0f0;border-radius:3px}.tab-bar::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px}}
+.tab-btn{flex-shrink:0;padding:7px 14px;border-radius:10px;border:1px solid #ddd;font-size:13px;font-weight:500;color:#888;background:#fafafa;position:relative;touch-action:manipulation}
+.tab-btn.sel{background:#1a5c2e;color:#fff;border-color:#1a5c2e}
+.nbadge{position:absolute;top:-5px;right:-5px;background:#e24b4a;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center}
+.bat-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid #c8dfc8;background:#f4f9f4;touch-action:pan-y;user-select:none}
+.bat-row.drag-over{border-color:#1a5c2e;border-style:dashed;background:#e0f0e6}
+.add-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid #eee;background:#fff;touch-action:manipulation}
+.bnum{width:26px;height:26px;border-radius:50%;background:#e6f1fb;color:#185fa5;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.bnum.on{background:#1a5c2e;color:#fff}
+.dh{color:#ccc;font-size:18px;padding:0 3px;flex-shrink:0;cursor:grab;user-select:none;touch-action:none}
+.warn{background:#faeeda;border:1px solid #fac775;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#854f0b}
+.err-box{background:#fcebeb;border:1px solid #f09595;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#a32d2d}
+.login-wrap{max-width:320px;margin:30px auto 0;padding:0 4px}
+.login-logo{width:80px;height:80px;border-radius:50%;object-fit:cover;display:block;margin:0 auto 14px}
+.login-title{text-align:center;font-size:18px;font-weight:700;color:#1a5c2e;margin-bottom:3px}
+.login-sub{text-align:center;font-size:13px;color:#999;margin-bottom:20px}
+.login-card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.hint{font-size:12px;color:#bbb;text-align:center;margin-top:10px}
+.divider{text-align:center;font-size:13px;color:#bbb;margin:4px 0 12px;position:relative}
+.divider::before,.divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:#eee}
+.divider::before{left:0}.divider::after{right:0}
+.sync{width:8px;height:8px;border-radius:50%;background:#ccc;transition:background .3s}
+.sync.on{background:#1a5c2e}
+.notif-row{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #f5f5f5;align-items:flex-start}
+.notif-row:last-child{border-bottom:none}
+.ndot{width:8px;height:8px;border-radius:50%;background:#e24b4a;flex-shrink:0;margin-top:4px}
+.ndot.r{background:transparent}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #f5f5f5}
+.set-row:last-child{border-bottom:none}
+.num-inp{width:60px;text-align:center;margin:0;padding:6px 8px;font-size:14px}
+.mfrow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pend-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0f0}
+.pend-row:last-child{border-bottom:none}
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#1a5c2e;color:#fff;padding:10px 20px;border-radius:12px;font-size:14px;font-weight:500;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);max-width:90vw;text-align:center;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+.err-msg{color:#a32d2d;font-size:13px;padding:8px 12px;background:#fcebeb;border-radius:8px;margin-bottom:10px;text-align:center;display:none}
+.role-btn{padding:3px 8px;border-radius:6px;border:1px solid #ddd;font-size:11px;font-weight:700;background:#f5f5f5;color:#aaa;cursor:pointer;flex-shrink:0;touch-action:manipulation;line-height:1.5;margin-right:3px}
+.role-btn:active{opacity:.7}
+.role-on-cap{background:#1a5c2e;color:#fff;border-color:#1a5c2e}
+.role-on-wk{background:#185fa5;color:#fff;border-color:#185fa5}
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+<div id="app">Loading...</div>
+<script>
+const LOGO = 'data:image/jpeg;base64,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';
+
+// ── DEMO MODE ────────────────────────────────────────────────────────────────
+let DEMO_MODE = false;
+
+const DEMO_USERS = [
+  {id:'d01',name:'James Anderson',role:'manager',status:'active',captain:false,keeper:false},
+  {id:'d02',name:'Joe Root',       role:'member', status:'active',captain:true, keeper:false},
+  {id:'d03',name:'Ben Stokes',     role:'member', status:'active',captain:false,keeper:false},
+  {id:'d04',name:'Jonny Bairstow', role:'member', status:'active',captain:false,keeper:true},
+  {id:'d05',name:'Stuart Broad',   role:'member', status:'active',captain:false,keeper:false},
+  {id:'d06',name:'Mark Wood',      role:'member', status:'active',captain:false,keeper:false},
+  {id:'d07',name:'Harry Brook',    role:'member', status:'active',captain:false,keeper:false},
+  {id:'d08',name:'Zak Crawley',    role:'member', status:'active',captain:false,keeper:false},
+  {id:'d09',name:'Ollie Pope',     role:'member', status:'active',captain:false,keeper:false},
+  {id:'d10',name:'Chris Woakes',   role:'member', status:'active',captain:false,keeper:false},
+  {id:'d11',name:'Gus Atkinson',   role:'member', status:'active',captain:false,keeper:false},
+];
+const DEMO_MATCHES = [
+  {id:'dm1',opponent:'Yateley',   date:'2026-05-10',time:'13:00',venue:'Home'},
+  {id:'dm2',opponent:'Eversley',  date:'2026-05-17',time:'13:00',venue:'Away'},
+  {id:'dm3',opponent:'Finchampstead',date:'2026-05-24',time:'13:00',venue:'Home'},
+];
+const DEMO_AVAIL = {
+  dm1:{d01:'yes',d02:'yes',d03:'yes',d04:'maybe',d05:'yes',d06:'no',d07:'yes',d08:'yes',d09:'maybe',d10:'yes',d11:'yes'},
+  dm2:{d01:'yes',d02:'yes',d03:'no', d04:'yes',  d05:'yes',d06:'yes',d07:'maybe',d08:'no',d09:'yes',d10:'yes',d11:'maybe'},
+  dm3:{d01:'maybe',d02:'yes',d03:'yes',d04:'yes',d05:'no',d06:'yes',d07:'yes',d08:'yes',d09:'yes',d10:'maybe',d11:'yes'},
+};
+const DEMO_SQUAD = {dm1:['d01','d02','d03','d04','d05','d07','d08','d09','d10','d11']};
+
+function enterDemo(){
+  DEMO_MODE=true;
+  SES={uid:'d01',name:'Demo Manager',role:'manager',pin:'',mc:false};
+  DB.users=Object.fromEntries(DEMO_USERS.map(u=>[u.id,u]));
+  DB.matches=Object.fromEntries(DEMO_MATCHES.map(m=>[m.id,m]));
+  DB.avail=DEMO_AVAIL;
+  DB.squad=DEMO_SQUAD;
+  DB.settings=DEF_SETTINGS;
+  DB.notifs=[
+    {id:'n1',ts:Date.now()-3600000,text:'Joe Root marked Available for vs Yateley (10/05/2026)',target:'manager',read:{}},
+    {id:'n2',ts:Date.now()-7200000,text:'Match updated: vs Eversley — 17/05/2026 at 13:00 (Away)',target:'all',read:{}},
+  ];
+  DB.live=true;
+  UI.screen='mgr';UI.mid='dm1';UI.tab=0;
+  render();
 }
 
-// ── RENDER HELPERS ────────────────────────────────────────────────────────────
-const lImg=sz=>'<img src="'+LOGO+'" style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;object-fit:cover;flex-shrink:0">';
-
-function tbar(){
-  const bd={manager:'badge-mgr',readonly:'badge-ro',member:'badge-m'};
-  const lb={manager:'Manager',readonly:'Read-only',member:'Member'};
-  const demoBar=DEMO_MODE?'<div style="background:#185fa5;color:#fff;text-align:center;font-size:12px;padding:6px;margin:-12px -14px 12px;font-weight:500">👀 Demo mode — no changes are saved. <button class="btn sm" style="background:#fff;color:#185fa5;border:none;margin-left:8px" onclick="exitDemo()">Exit</button></div>':'';
-  return demoBar+'<div class="topbar">'
-    +'<div class="topbar-left">'+lImg(36)+'<span class="club-name">Sandhurst CC</span></div>'
-    +'<div style="display:flex;align-items:center;gap:8px">'
-    +'<div class="sync'+(DB.live?' on':'')+'"></div>'
-    +'<span style="font-size:12px;color:#888;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(SES.name||'')+'</span>'
-    +'<span class="badge '+(bd[SES.role]||'badge-m')+'">'+(lb[SES.role]||'Member')+'</span>'
-    +'<button class="btn sm" onclick="DEMO_MODE?exitDemo():doLogout()">'+(DEMO_MODE?'Exit demo':'Out')+'</button>'
-    +'</div></div>';
+function exitDemo(){
+  DEMO_MODE=false;
+  DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},notifs:[],live:false};
+  clearSes();
+  UI.screen='login';UI.tab=0;UI.memTab=0;
+  render();
 }
+
+// ── HASH ──────────────────────────────────────────────────────────────────────
+function hp(p){let v=0;for(let i=0;i<p.length;i++){v=((v<<5)-v)+p.charCodeAt(i);v|=0;}return 'h'+Math.abs(v).toString(36);}
+
+// ── SEED DATA ─────────────────────────────────────────────────────────────────
+const SEEDS=[
+  {id:'u01',name:'Ben Stinton',    role:'manager',pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u02',name:'Chris Innerd',   role:'manager',pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u03',name:'Steve Moon',     role:'manager',pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u04',name:'Alex Preston',   role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u05',name:'Andy Wenman',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u06',name:'Ben May',        role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u07',name:'Brandon Bullen', role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u08',name:'Charlie Stinton',role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u09',name:'Chris Panting',  role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u10',name:'Conrad Purcell', role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u11',name:'Coptor Brunt',   role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u12',name:'David Bullen',   role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u13',name:'Donovan Kennedy',role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u14',name:'Eloise Bullen',  role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u15',name:'George Goodwin', role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u16',name:'George Cyster',  role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u17',name:'Harry Robb',     role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u18',name:'James Couldrey', role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u19',name:'Jamie Stirling', role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u20',name:'Louis Bullen',   role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u21',name:'Max Harding',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u22',name:'Michael Pye',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u23',name:'Mike Cutler',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u24',name:'Nick Rogers',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u25',name:'Nigel Collison', role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u26',name:'Paul Slater',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u27',name:'Ricky Singh',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u28',name:'Russell King',   role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u29',name:'Sam Barrett',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u30',name:'Sam Robson',     role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u31',name:'Saymon Saymon',  role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u32',name:'Sunny Deevi',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u33',name:'Tim Goodwin',    role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+  {id:'u34',name:'Tom Mawhinney',  role:'member', pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false},
+];
+const SEED_MATCHES=[
+  {id:'m1',opponent:'TBC',date:'2026-05-09',time:'13:00',venue:'Home'},
+  {id:'m2',opponent:'TBC',date:'2026-05-16',time:'13:00',venue:'Away'},
+];
+const DEF_SETTINGS={reminderDays:6,lockDays:3,reminderTime:'12:00'};
+
+// ── LOCAL STORAGE SESSION ─────────────────────────────────────────────────────
+const LS={
+  g:k=>{try{return localStorage.getItem(k);}catch(e){return null;}},
+  s:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}},
+  d:k=>{try{localStorage.removeItem(k);}catch(e){}},
+};
+let SES={
+  uid:   LS.g('s_uid'),
+  name:  LS.g('s_name'),
+  role:  LS.g('s_role'),
+  pin:   LS.g('s_pin'),
+  mc:    LS.g('s_mc')==='1',
+};
+function saveSes(u){
+  SES={uid:u.id,name:u.name,role:u.role,pin:u.pin,mc:!!u.mustChange};
+  LS.s('s_uid',u.id);LS.s('s_name',u.name);LS.s('s_role',u.role);
+  LS.s('s_pin',u.pin);LS.s('s_mc',u.mustChange?'1':'0');
+}
+function clearSes(){
+  SES={uid:null,name:null,role:null,pin:null,mc:false};
+  ['s_uid','s_name','s_role','s_pin','s_mc'].forEach(k=>LS.d(k));
+}
+function updPin(p,mc){
+  SES.pin=p;SES.mc=mc||false;LS.s('s_pin',p);LS.s('s_mc',mc?'1':'0');
+}
+
+// ── FIREBASE DB ───────────────────────────────────────────────────────────────
+let DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},notifs:[],live:false};
+
+// ── UI STATE ──────────────────────────────────────────────────────────────────
+let UI={
+  screen: SES.uid?(SES.mc?'pin':(SES.role==='manager'||SES.role==='readonly'?'mgr':'mem')):'login',
+  mid: SEED_MATCHES[0].id,
+  tab: 0,
+  memTab: 0,
+};
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const ini  = n => n.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+const fmtD = d => {if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];};
+const allP = () => {
+  const from=Object.values(DB.users).filter(u=>u.status==='active');
+  const list=(from.length?from:SEEDS.filter(u=>u.status==='active')).sort((a,b)=>a.name.localeCompare(b.name));
+  if(!SES.uid)return list;
+  const me=list.find(p=>p.id===SES.uid);
+  if(!me)return list;
+  return [me,...list.filter(p=>p.id!==SES.uid)];
+};
+const pendP= () => Object.values(DB.users).filter(u=>u.status==='pending');
+const getM = id => DB.matches[id]||Object.values(DB.matches)[0]||SEED_MATCHES[0];
+const getAv= (mid,uid)=>(DB.avail[mid]||{})[uid]||'none';
+const getSq= mid=>DB.squad[mid]||[];
+const isLk = mid=>{const m=getM(mid);if(!m||!m.date)return false;return Date.now()>=new Date(m.date+'T'+(m.time||'13:00')).getTime()-DB.settings.lockDays*86400000;};
+const dTo  = mid=>{const m=getM(mid);if(!m||!m.date)return 999;return Math.ceil((new Date(m.date+'T12:00:00')-Date.now())/86400000);};
+const ago  = ts=>{const s=Math.floor((Date.now()-ts)/1000);if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';};
+const avc  = (mid,v)=>allP().filter(p=>getAv(mid,p.id)===v).length;
+const syms = (u,mgr)=>mgr?((u.captain?'🛡':'')+(u.keeper?'🧤':'')):'';
+const unread=()=>DB.notifs.filter(n=>{
+  if(!SES.uid)return false;
+  const k=SES.role==='member'?SES.uid:'manager';
+  return!n.read?.[k]&&(SES.role==='member'?n.target==='all'||n.target===SES.uid:n.target==='manager'||n.target==='all');
+}).length;
+
+function saveMatchScroll(el){try{sessionStorage.setItem('ms_scroll',el.scrollLeft);}catch(e){}}
+function restoreMatchScroll(){try{const v=sessionStorage.getItem('ms_scroll');if(!v)return;setTimeout(function(){const el=document.querySelector('.match-scroll');if(el)el.scrollLeft=parseInt(v);},50);}catch(e){}}
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+// ── FIREBASE ──────────────────────────────────────────────────────────────────
+function fbSet(path,val){if(DEMO_MODE||!window._db)return;window._set(window._ref(window._db,path),val);}
+function fbGet(path){return window._get(window._ref(window._db,path));}
+
+function initFB(){
+  if(!window._firebaseReady){document.addEventListener('firebase-ready',initFB,{once:true});return;}
+  if(!DEMO_MODE&&!window._seeded){
+    window._seeded=true;
+    fbGet('sandhurst/users').then(s=>{if(!DEMO_MODE&&!s.val()){const o={};SEEDS.forEach(u=>{o[u.id]=u;});fbSet('sandhurst/users',o);}});
+    fbGet('sandhurst/matches').then(s=>{if(!DEMO_MODE&&!s.val()){const o={};SEED_MATCHES.forEach(m=>{o[m.id]=m;});fbSet('sandhurst/matches',o);}});
+    fbGet('sandhurst/settings').then(s=>{if(!DEMO_MODE&&!s.val())fbSet('sandhurst/settings',DEF_SETTINGS);});
+  }
+  const noRe=['login','pin','register','pending'];
+  window._onValue(window._ref(window._db,'sandhurst/users'),s=>{if(DEMO_MODE)return;DB.users=s.val()||{};if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/matches'),s=>{if(DEMO_MODE)return;DB.matches=s.val()||{};DB.live=true;if(!DB.matches[UI.mid])UI.mid=Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{if(DEMO_MODE)return;DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{if(DEMO_MODE)return;const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
+  function loadAvail(){if(DEMO_MODE)return;fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});}
+  function loadSquad(){if(DEMO_MODE)return;fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});}
+  if(!DEMO_MODE){loadAvail();loadSquad();}
+}
+
+function refreshAvSq(){
+  if(DEMO_MODE)return;
+  fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});
+  fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});
+}
+
+function addNotif(text,target,mid,type){
+  const id='n'+Date.now();
+  fbSet('sandhurst/notifications/'+id,{id,ts:Date.now(),text,target,matchId:mid||null,type:type||'info',read:{}});
+}
+
+function markRead(){
+  if(!SES.uid)return;
+  const k=SES.role==='member'?SES.uid:'manager';
+  DB.notifs.filter(n=>{
+    const mine=SES.role==='member'?(n.target==='all'||n.target===SES.uid):(n.target==='manager'||n.target==='all');
+    return mine&&!n.read?.[k];
+  }).forEach(n=>fbSet('sandhurst/notifications/'+n.id+'/read/'+k,true));
+}
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+function doLogin(){
+  const nameEl=document.getElementById('f-name');
+  const pinEl=document.getElementById('f-pin');
+  const errEl=document.getElementById('f-err');
+  const name=(nameEl?nameEl.value:'').trim().toLowerCase().replace(/\s+/g,' ');
+  const pin=(pinEl?pinEl.value:'').trim();
+  if(errEl)errEl.style.display='none';
+  if(!name||!pin){showErr('Enter your name and PIN.');return;}
+  if(window._firebaseReady){
+    fbGet('sandhurst/users').then(s=>{
+      const users=s.val()?Object.values(s.val()):SEEDS;
+      tryLogin(users,name,pin);
+    }).catch(()=>tryLogin(Object.values(DB.users).length?Object.values(DB.users):SEEDS,name,pin));
+  } else {
+    tryLogin(SEEDS,name,pin);
+  }
+}
+
+function tryLogin(users,name,pin){
+  const user=users.find(u=>u.name.toLowerCase()===name&&u.status==='active');
+  if(!user){showErr('Name not recognised. Check spelling or register below.');return;}
+  if(user.pin!==hp(pin)){showErr('Incorrect PIN.');return;}
+  saveSes(user);
+  if(user.mustChange){UI.screen='pin';render();return;}
+  UI.screen=(user.role==='manager'||user.role==='readonly')?'mgr':'mem';
+  render();
+}
+
+function doChangePin(){
+  const np=(document.getElementById('f-np')?document.getElementById('f-np').value:'').trim();
+  const conf=(document.getElementById('f-cp')?document.getElementById('f-cp').value:'').trim();
+  if(np.length<4){showErr('PIN must be at least 4 digits.');return;}
+  if(np!==conf){showErr('PINs do not match.');return;}
+  if(np==='1000'){showErr('Choose a different PIN.');return;}
+  const hashed=hp(np);
+  updPin(hashed,false);
+  fbSet('sandhurst/users/'+SES.uid+'/pin',hashed);
+  fbSet('sandhurst/users/'+SES.uid+'/mustChange',false);
+  UI.screen=(SES.role==='manager'||SES.role==='readonly')?'mgr':'mem';
+  toast('PIN set — welcome, '+(SES.name?SES.name.split(' ')[0]:'')+'!');
+  render();
+}
+
+function doRegister(){
+  const name=(document.getElementById('f-rname')?document.getElementById('f-rname').value:'').trim();
+  const np=(document.getElementById('f-rpin')?document.getElementById('f-rpin').value:'').trim();
+  const conf=(document.getElementById('f-rconf')?document.getElementById('f-rconf').value:'').trim();
+  if(name.length<2){showErr('Enter your full name.');return;}
+  if(np.length<4){showErr('PIN must be 4+ digits.');return;}
+  if(np!==conf){showErr('PINs do not match.');return;}
+  if(np==='1000'){showErr('Choose a different PIN.');return;}
+  const all=Object.values(DB.users).length?Object.values(DB.users):SEEDS;
+  if(all.find(u=>u.name.toLowerCase()===name.toLowerCase())){showErr('Name already registered.');return;}
+  const uid='u_'+Date.now().toString(36);
+  fbSet('sandhurst/users/'+uid,{id:uid,name,role:'member',pin:hp(np),mustChange:false,status:'pending',captain:false,keeper:false});
+  addNotif('New player registered: '+name,'manager',null,'registration');
+  UI.screen='pending';render();
+}
+
+function doLogout(){clearSes();UI.screen='login';UI.tab=0;render();}
+
+function showErr(msg){
+  const el=document.getElementById('f-err');
+  if(el){el.textContent=msg;el.style.display='block';}
+}
+
+// ── AVAILABILITY ──────────────────────────────────────────────────────────────
+function setAv(mid,uid,val){
+  if(!SES.uid)return;
+  if(SES.role==='readonly')return;
+  if(SES.role==='member'&&SES.uid!==uid)return;
+  if(SES.role==='member'&&isLk(mid))return;
+  const newVal=getAv(mid,uid)===val?'none':val;
+  if(!DB.avail[mid])DB.avail[mid]={};
+  DB.avail[mid][uid]=newVal;
+  renderAvailList(mid);
+  fbSet('sandhurst/avail/'+mid+'/'+uid,newVal);
+  fbSet('sandhurst/availability/'+mid+'/'+uid,newVal);
+  if(newVal!=='none'&&(SES.uid!==uid||SES.role!=='manager')){
+    const p=DB.users[uid]||SEEDS.find(u=>u.id===uid);
+    const m=getM(mid);
+    const lbl={yes:'Available',no:'Unavailable',maybe:'Maybe'};
+    addNotif((p?p.name:'Player')+' marked '+lbl[newVal]+' for vs '+(m?m.opponent:'match')+' ('+fmtD(m?m.date:'')+')','manager',mid,'avail');
+  }
+}
+
+// ── SQUAD ─────────────────────────────────────────────────────────────────────
+function togSq(mid,uid){
+  if(SES.role!=='manager')return;
+  const sq=[...getSq(mid)];
+  const i=sq.indexOf(uid);
+  if(i>-1)sq.splice(i,1);
+  else{if(sq.length>=11){toast('XI already full');return;}sq.push(uid);}
+  DB.squad[mid]=sq;
+  render();
+  fbSet('sandhurst/squad/'+mid,sq);
+}
+
+function togRole(uid,field){
+  if(SES.role!=='manager')return;
+  const users=DB.users;
+  if(field==='captain'){
+    const already=users[uid]&&users[uid].captain;
+    Object.keys(users).forEach(function(id){
+      if(users[id]&&users[id].captain){users[id].captain=false;fbSet('sandhurst/users/'+id+'/captain',false);}
+    });
+    if(!already){if(users[uid])users[uid].captain=true;fbSet('sandhurst/users/'+uid+'/captain',true);toast('🛡 Captain set');}
+    else toast('Captain removed');
+  } else {
+    const already=users[uid]&&users[uid].keeper;
+    Object.keys(users).forEach(function(id){
+      if(users[id]&&users[id].keeper){users[id].keeper=false;fbSet('sandhurst/users/'+id+'/keeper',false);}
+    });
+    if(!already){if(users[uid])users[uid].keeper=true;fbSet('sandhurst/users/'+uid+'/keeper',true);toast('🧤 WK set');}
+    else toast('Wicketkeeper removed');
+  }
+  render();
+}
+
+// ── DRAG ──────────────────────────────────────────────────────────────────────
+let dragU=null;
+function dS(e,u){dragU=u;e.dataTransfer.effectAllowed='move';}
+function dO(e){e.preventDefault();}
+function dE(e){e.currentTarget.classList.add('drag-over');}
+function dL(e){e.currentTarget.classList.remove('drag-over');}
+function dD(e,mid){
+  e.preventDefault();
+  const t=e.currentTarget.dataset.uid;
+  if(!dragU||dragU===t)return;
+  const sq=[...getSq(mid)];
+  const fi=sq.indexOf(dragU),ti=sq.indexOf(t);
+  if(fi>-1&&ti>-1){sq.splice(fi,1);sq.splice(ti,0,dragU);}
+  DB.squad[mid]=sq;render();fbSet('sandhurst/squad/'+mid,sq);
+}
+function dEn(){dragU=null;}
+let tU=null,tM=null,tEl=null,tCl=null;
+function tS(e,u,m){tU=u;tM=m;tEl=e.currentTarget;tCl=tEl.cloneNode(true);tCl.style.cssText='position:fixed;opacity:.7;pointer-events:none;z-index:999;width:'+tEl.offsetWidth+'px';document.body.appendChild(tCl);tEl.style.opacity='.3';}
+function tMv(e){if(!tCl)return;e.preventDefault();const t=e.touches[0];tCl.style.left=(t.clientX-60)+'px';tCl.style.top=(t.clientY-20)+'px';document.querySelectorAll('.bat-row').forEach(r=>r.classList.remove('drag-over'));const el=document.elementFromPoint(t.clientX,t.clientY);const row=el&&el.closest('.bat-row');if(row&&row.dataset.uid!==tU)row.classList.add('drag-over');}
+function tEn(e){if(!tCl)return;document.body.removeChild(tCl);tCl=null;if(tEl)tEl.style.opacity='';const t=e.changedTouches[0];const el=document.elementFromPoint(t.clientX,t.clientY);const row=el&&el.closest('.bat-row');if(row&&row.dataset.uid!==tU&&tM&&SES.role==='manager'){const sq=[...getSq(tM)];const fi=sq.indexOf(tU),ti=sq.indexOf(row.dataset.uid);if(fi>-1&&ti>-1){sq.splice(fi,1);sq.splice(ti,0,tU);}DB.squad[tM]=sq;render();fbSet('sandhurst/squad/'+tM,sq);}tU=null;tM=null;tEl=null;}
+
+// ── PLAYERS ───────────────────────────────────────────────────────────────────
+function addPlayer(){
+  const name=(document.getElementById('ap-name')?document.getElementById('ap-name').value:'').trim();
+  const role=document.getElementById('ap-role')?document.getElementById('ap-role').value:'member';
+  if(name.length<2){toast('Enter a full name');return;}
+  const all=Object.values(DB.users).length?Object.values(DB.users):SEEDS;
+  if(all.find(u=>u.name.toLowerCase()===name.toLowerCase())){toast('Name already exists');return;}
+  const uid='u_'+Date.now().toString(36);
+  fbSet('sandhurst/users/'+uid,{id:uid,name,role,pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false});
+  addNotif(name+' added to the squad by manager','all',null,'registration');
+  toast(name+' added with PIN 1000');
+  render();
+}
+function removePlayer(uid,name){
+  if(!confirm('Remove '+name+' from the squad? This cannot be undone.'))return;
+  fbSet('sandhurst/users/'+uid,null);
+  toast(name+' removed');
+}
+function approveP(uid){fbSet('sandhurst/users/'+uid+'/status','active');const u=DB.users[uid];addNotif((u?u.name:'Player')+' approved','all',null,'reg');toast((u?u.name:'Player')+' approved');}
+function rejectP(uid){if(!confirm('Remove?'))return;fbSet('sandhurst/users/'+uid,null);}
+function saveName(){const n=(document.getElementById('f-nn')?document.getElementById('f-nn').value:'').trim();if(n.length<2){toast('Enter a valid name');return;}SES.name=n;LS.s('s_name',n);fbSet('sandhurst/users/'+SES.uid+'/name',n);toast('Name updated');render();}
+function savePinCh(){const c=(document.getElementById('f-pc')?document.getElementById('f-pc').value:'').trim();const np=(document.getElementById('f-pn')?document.getElementById('f-pn').value:'').trim();const cf=(document.getElementById('f-pf')?document.getElementById('f-pf').value:'').trim();if(hp(c)!==SES.pin){toast('Current PIN incorrect');return;}if(np.length<4){toast('4+ digits required');return;}if(np!==cf){toast('PINs do not match');return;}if(np==='1000'){toast('Choose a different PIN');return;}const h2=hp(np);updPin(h2,false);fbSet('sandhurst/users/'+SES.uid+'/pin',h2);toast('PIN changed');render();}
+
+// ── MATCHES ───────────────────────────────────────────────────────────────────
+function saveM(mid){const o=(document.getElementById('eo-'+mid)?document.getElementById('eo-'+mid).value:'').trim();const d=document.getElementById('ed-'+mid)?document.getElementById('ed-'+mid).value:'';const t=document.getElementById('et-'+mid)?document.getElementById('et-'+mid).value:'13:00';const v=document.getElementById('ev-'+mid)?document.getElementById('ev-'+mid).value:'Home';const a=(document.getElementById('ea-'+mid)?document.getElementById('ea-'+mid).value:'').trim();if(!o||!d){toast('Enter opponent and date');return;}const old=getM(mid);if(old.opponent!==o||old.date!==d||old.time!==t||old.venue!==v)addNotif('Match updated: vs '+o+' — '+fmtD(d)+' at '+t+' ('+v+')','all',mid,'match');fbSet('sandhurst/matches/'+mid,{id:mid,opponent:o,date:d,time:t,venue:v,address:a});toast('Match saved');}
+function addM(){const o=(document.getElementById('nm-o')?document.getElementById('nm-o').value:'').trim();const d=document.getElementById('nm-d')?document.getElementById('nm-d').value:'';const t=document.getElementById('nm-t')?document.getElementById('nm-t').value:'13:00';const v=document.getElementById('nm-v')?document.getElementById('nm-v').value:'Home';const a=(document.getElementById('nm-a')?document.getElementById('nm-a').value:'').trim();if(!o||!d){toast('Enter opponent and date');return;}const id='m'+Date.now();fbSet('sandhurst/matches/'+id,{id,opponent:o,date:d,time:t,venue:v,address:a});addNotif('New match: vs '+o+' — '+fmtD(d)+' at '+t+' ('+v+')','all',id,'match');UI.mid=id;toast('Match added');render();}
+
+async function lookupAddress(mid){
+  const oppEl=document.getElementById(mid?'eo-'+mid:'nm-o');
+  const addrEl=document.getElementById(mid?'ea-'+mid:'nm-a');
+  if(!oppEl||!addrEl)return;
+  const opp=oppEl.value.trim();
+  if(!opp){toast('Enter opponent name first');return;}
+  const btn=document.getElementById('lookup-btn-'+(mid||'new'));
+  if(btn){btn.textContent='Searching...';btn.disabled=true;}
+  try{
+    const q=encodeURIComponent(opp+' cricket club');
+    const res=await fetch('https://nominatim.openstreetmap.org/search?q='+q+'&format=json&limit=1&countrycodes=gb',{headers:{'Accept-Language':'en'}});
+    const data=await res.json();
+    if(data&&data.length>0){
+      const parts=data[0].display_name.split(',').map(s=>s.trim()).filter(Boolean);
+      addrEl.value=parts.slice(0,4).join(', ');
+      toast('✓ Address found — check and edit if needed');
+    }else toast('No result — enter address manually');
+  }catch(e){toast('Lookup failed — enter manually');}
+  if(btn){btn.textContent='🔍 Lookup';btn.disabled=false;}
+}
+function delM(mid){if(!confirm('Remove match?'))return;fbSet('sandhurst/matches/'+mid,null);const r=Object.keys(DB.matches).filter(k=>k!==mid);UI.mid=r[0]||'';}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+function saveSt(){const rd=parseInt(document.getElementById('s-r')?document.getElementById('s-r').value:6)||6;const ld=parseInt(document.getElementById('s-l')?document.getElementById('s-l').value:3)||3;const rt=document.getElementById('s-t')?document.getElementById('s-t').value:'12:00';fbSet('sandhurst/settings',{reminderDays:rd,lockDays:ld,reminderTime:rt});toast('Settings saved');}
+
+// ── EXPORTS ───────────────────────────────────────────────────────────────────
+function doXL(){if(!window.XLSX){toast('Loading...');return;}const pl=allP();const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));const hdr=['Player',...ml.map(m=>m.opponent+'\n'+fmtD(m.date)),'Played','Available','Unavailable'];const rows=[hdr];pl.forEach(p=>{const cells=ml.map(m=>{if(getSq(m.id).includes(p.id))return'Played';const av=getAv(m.id,p.id);return av==='yes'?'Available':av==='maybe'?'Maybe':av==='no'?'Unavailable':'-';});rows.push([p.name,...cells,ml.filter(m=>getSq(m.id).includes(p.id)).length,ml.filter(m=>['yes','maybe'].includes(getAv(m.id,p.id))).length,ml.filter(m=>getAv(m.id,p.id)==='no').length]);});rows.push([],['Totals',...ml.map(m=>getSq(m.id).length+' played'),'','','']);const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:20},...ml.map(()=>({wch:18})),{wch:8},{wch:10},{wch:12}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Season');XLSX.writeFile(wb,'SandhurstCC.xlsx');}
 
 function mTabs(onSwitch){
   const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));
@@ -934,7 +1409,7 @@ function rMgr(app){
     const ml=Object.values(DB.matches).sort((a,b)=>a.date.localeCompare(b.date));
     ml.forEach(function(match){
       h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span class="pill '+(match.venue==='Home'?'home':'away')+'" style="margin:0">vs '+match.opponent+' · '+fmtD(match.date)+'</span>'+(isRO?'':'<button class="btn sm ghost-red" onclick="delM(\''+match.id+'\')">Remove</button>')+'</div>';
-      if(!isRO){h+='<div class="mfrow"><input id="eo-'+match.id+'" value="'+match.opponent+'" placeholder="Opponent"><select id="ev-'+match.id+'"><option'+(match.venue==='Home'?' selected':'')+'>Home</option><option'+(match.venue==='Away'?' selected':'')+'>Away</option></select></div><div class="mfrow"><input type="date" id="ed-'+match.id+'" value="'+match.date+'"><input type="time" id="et-'+match.id+'" value="'+(match.time||'13:00')+'"></div><button class="btn primary full" style="margin-top:4px" onclick="saveM(\''+match.id+'\')">Save changes</button>';}
+      if(!isRO){h+='<div class="mfrow"><input id="eo-'+match.id+'" value="'+match.opponent+'" placeholder="Opponent"><select id="ev-'+match.id+'"><option'+(match.venue==='Home'?' selected':'')+'>Home</option><option'+(match.venue==='Away'?' selected':'')+'>Away</option></select></div><div class="mfrow"><input type="date" id="ed-'+match.id+'" value="'+match.date+'"><input type="time" id="et-'+match.id+'" value="'+(match.time||'13:00')+'"></div><div style="display:flex;gap:6px;margin-bottom:10px"><input id="ea-'+match.id+'" value="'+(match.address||'')+'" placeholder="Venue address" style="margin:0;flex:1"><button id="lookup-btn-'+match.id+'" class="btn sm" onclick="lookupAddress(\''+match.id+'\')" style="flex-shrink:0">🔍 Lookup</button></div><button class="btn primary full" style="margin-top:4px" onclick="saveM(\''+match.id+'\')">Save changes</button';}
       else h+='<div style="font-size:13px;color:#888">'+fmtD(match.date)+' at '+(match.time||'13:00')+' · '+match.venue+'</div>';
       h+='</div>';
     });
