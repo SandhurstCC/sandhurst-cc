@@ -380,6 +380,7 @@ function tryLogin(users,name,pin){
   if(!user){showErr('Name not recognised. Check spelling or register below.');return;}
   if(user.pin!==hp(pin)){showErr('Incorrect PIN.');return;}
   saveSes(user);
+  fbSet('sandhurst/users/'+user.id+'/lastSeen',Date.now());
   if(user.mustChange){UI.screen='pin';render();return;}
   UI.screen=(user.role==='manager'||user.role==='readonly')?'mgr':'mem';
   render();
@@ -501,6 +502,15 @@ function changeRole(uid){
   fbSet('sandhurst/users/'+uid+'/role',newRole);
   toast(u.name+' is now '+newRole);
   render();
+}
+
+function resetPin(uid){
+  const u=DB.users[uid];if(!u)return;
+  if(!confirm('Reset '+u.name+'\'s PIN to 1000?'))return;
+  fbSet('sandhurst/users/'+uid+'/pin',hp('1000'));
+  fbSet('sandhurst/users/'+uid+'/mustChange',true);
+  if(DB.users[uid]){DB.users[uid].mustChange=true;}
+  toast(u.name+'\'s PIN reset to 1000');
 }
 
 function togRole(uid,field){
@@ -1003,7 +1013,10 @@ function rMgr(app){
       h+='</div>';
     }
     h+='<div style="font-size:14px;font-weight:600;margin-bottom:8px">Active ('+allP().length+')</div><div class="card">';
-    allP().forEach(function(p){h+='<div class="p-row"><div class="av-c">'+ini(p.name)+'</div><div class="p-name">'+p.name+syms(p,true)+'</div><button class="btn sm '+(p.role==="manager"?"badge-mgr":"badge-m")+'" style="margin-left:auto;border:none" '+(isRO?'disabled':'')+' onclick="changeRole(\''+p.id+'\')">'+(p.role==="manager"?"Manager":"Member")+'</button>'+(isRO?'':'<button class="btn sm ghost-red" style="margin-left:8px" onclick="removePlayer(\''+p.id+'\',\''+p.name+'\')" >Remove</button>')+'</div>';});
+    allP().forEach(function(p){const ls=p.lastSeen?ago(p.lastSeen):null;
+        const lsTag=ls?'<span style="font-size:11px;color:#999;margin-left:4px">'+ls+'</span>'
+          :(p.mustChange!==false?'<span style="font-size:11px;background:#faeeda;color:#854f0b;padding:2px 7px;border-radius:6px;margin-left:4px">Never logged in</span>':'<span style="font-size:11px;color:#999;margin-left:4px">Never logged in</span>');
+        h+='<div class="p-row" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0"><div class="av-c">'+ini(p.name)+'</div><div><div class="p-name" style="margin:0">'+p.name+syms(p,true)+'</div>'+lsTag+'</div></div><div style="display:flex;gap:6px;align-items:center;flex-shrink:0"><button class="btn sm '+(p.role==="manager"?"badge-mgr":"badge-m")+'" style="border:none" '+(isRO?'disabled':'')+' onclick="changeRole(\''+p.id+'\')">'+(p.role==="manager"?"Manager":"Member")+'</button>'+(isRO?'':'<button class="btn sm" style="border-color:#ddd;color:#888" onclick="resetPin(\''+p.id+'\')" title="Reset PIN to 1000">PIN</button><button class="btn sm ghost-red" onclick="removePlayer(\''+p.id+'\',\''+p.name+'\')" >Remove</button>')+'</div></div>';});
     h+='</div>';
 
     h+='<div style="font-size:14px;font-weight:600;margin-bottom:8px">My profile</div>'
