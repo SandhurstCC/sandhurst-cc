@@ -102,6 +102,10 @@ label{display:block;font-size:13px;color:#888;margin-bottom:5px}
 .err-msg{color:#a32d2d;font-size:13px;padding:8px 12px;background:#fcebeb;border-radius:8px;margin-bottom:10px;text-align:center;display:none}
 .role-btn{padding:3px 8px;border-radius:6px;border:1px solid #ddd;font-size:11px;font-weight:700;background:#f5f5f5;color:#aaa;cursor:pointer;flex-shrink:0;touch-action:manipulation;line-height:1.5;margin-right:3px}
 .role-btn:active{opacity:.7}
+.tea-card{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;align-items:center;gap:12px}
+.tea-check{width:26px;height:26px;border-radius:8px;border:2px solid #ddd;background:#fafafa;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;font-size:16px;touch-action:manipulation}
+.tea-check.on{background:#854f0b;border-color:#854f0b;color:#fff}
+.tea-check.taken{background:#f0f0f0;border-color:#ddd;cursor:default}
 .role-on-cap{background:#1a5c2e;color:#fff;border-color:#1a5c2e}
 .role-on-wk{background:#185fa5;color:#fff;border-color:#185fa5}
 </style>
@@ -435,7 +439,27 @@ function setAv(mid,uid,val){
   }
 }
 
-// ── SQUAD ─────────────────────────────────────────────────────────────────────
+function getTea(mid){return (DB.avail[mid]||{}).__tea__||null;}
+
+function setTea(mid){
+  if(!SES.uid)return;
+  if(SES.role==='readonly')return;
+  if(isLk(mid)&&SES.role!=='manager')return;
+  const current=getTea(mid);
+  if(current&&current!==SES.uid){toast('Already taken by '+((DB.users[current]||{}).name||'someone'));return;}
+  const newVal=current===SES.uid?null:SES.uid;
+  if(!DB.avail[mid])DB.avail[mid]={};
+  if(newVal)DB.avail[mid].__tea__=newVal;
+  else delete DB.avail[mid].__tea__;
+  fbSet('sandhurst/avail/'+mid+'/__tea__',newVal||null);
+  if(newVal){
+    const m=getM(mid);
+    addNotif(SES.name+' volunteered to make tea for vs '+(m?m.opponent:'match')+' ('+fmtD(m?m.date:'')+')','manager',mid,'tea');
+  }
+  render();
+}
+
+// ── SQUAD ───────────────────────────────────────────────────────────────────────────────
 function togSq(mid,uid){
   if(SES.role!=='manager')return;
   const sq=[...getSq(mid)];
@@ -604,6 +628,33 @@ function mTabs(onSwitch){
 function pillHtml(m){return '<span class="pill '+(m.venue==='Home'?'home':'away')+'">vs '+m.opponent+' · '+fmtD(m.date)+(m.time?' at '+m.time:'')+' · '+m.venue+'</span>';}
 
 // ── AVAILABILITY LIST (partial re-render) ────────────────────────────────────
+function teaCardHtml(mid){
+  const m=getM(mid);
+  if(!m||m.venue!=='Home')return '';
+  const tea=getTea(mid);
+  const teaP=tea?DB.users[tea]:null;
+  const isMe=tea===SES.uid;
+  const taken=tea&&!isMe;
+  const locked=isLk(mid)&&SES.role!=='manager';
+  const canClick=!taken&&!locked&&SES.role!=='readonly';
+  let inner;
+  if(tea){
+    inner='<div class="tea-check on'+(isMe?'':' taken')+'">'+(isMe?'✓':'✓')+'</div>'
+      +'<div style="flex:1">'
+      +'<div style="font-size:13px;font-weight:600;color:#854f0b">🍵 Tea volunteer</div>'
+      +'<div style="font-size:12px;color:#555;margin-top:2px">'+(teaP?teaP.name:'Someone')+' is making tea</div>'
+      +'</div>';
+  } else {
+    inner='<div class="tea-check'+(locked?' taken':'')+'">'+(locked?'–':'')+'</div>'
+      +'<div style="flex:1">'
+      +'<div style="font-size:13px;font-weight:600;color:#854f0b">🍵 Tea volunteer</div>'
+      +'<div style="font-size:12px;color:#999;margin-top:2px">'+(locked?'Locked':'Tap to volunteer for tea')+'</div>'
+      +'</div>';
+  }
+  const click=canClick?'onclick="setTea(\''+mid+'\')"':'';
+  return '<div class="tea-card" '+click+'>'+inner+'</div>';
+}
+
 function renderAvailList(mid){
   const listEl=document.getElementById('av-list');
   if(!listEl)return;
@@ -777,7 +828,7 @@ function rMem(app){
         +'<div class="stat"><div class="stat-n">'+avc(mid,'no')+'</div><div class="stat-l">Unavailable</div></div>'
         +'<div class="stat"><div class="stat-n">'+avc(mid,'none')+'</div><div class="stat-l">No response</div></div>'
         +'</div>';
-      h+='<div class="card" id="av-list"></div>';
+      h+=teaCardHtml(mid)+'<div class="card" id="av-list"></div>';
     }
   }
   else if(UI.memTab===1){
@@ -855,7 +906,7 @@ function rMgr(app){
         +'<div class="stat"><div class="stat-n">'+avc(mid,'no')+'</div><div class="stat-l">Unavailable</div></div>'
         +'<div class="stat"><div class="stat-n">'+avc(mid,'none')+'</div><div class="stat-l">No response</div></div>'
         +'</div>';
-      h+='<div class="card" id="av-list"></div>';
+      h+=teaCardHtml(mid)+'<div class="card" id="av-list"></div>';
     }
   }
   else if(UI.tab===1){
