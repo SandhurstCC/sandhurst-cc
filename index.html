@@ -853,6 +853,7 @@ function rMem(app){
     h+=mTabs(DEMO_MODE?'':'refreshAvSq();');
     if(m.id){
       h+=pillHtml(m);
+      if(m.address&&m.address.trim())h+='<div style="font-size:13px;color:#555;margin:-8px 0 12px;padding:0 2px">📍 '+m.address+'</div>';
       if(lk)h+='<div class="err-box">🔒 Availability locked '+DB.settings.lockDays+' days before the match.</div>';
       h+='<div class="stats">'
         +'<div class="stat"><div class="stat-n">'+avc(mid,'yes')+'</div><div class="stat-l">Available</div></div>'
@@ -931,6 +932,7 @@ function rMgr(app){
     h+=mTabs(DEMO_MODE?'':'refreshAvSq();');
     if(m.id){
       h+=pillHtml(m);
+      if(m.address&&m.address.trim())h+='<div style="font-size:13px;color:#555;margin:-8px 0 12px;padding:0 2px">📍 '+m.address+'</div>';
       if(isLk(mid))h+='<div class="err-box">🔒 Locked for members. You can still override.</div>';
       h+='<div class="stats">'
         +'<div class="stat"><div class="stat-n">'+avc(mid,'yes')+'</div><div class="stat-l">Available</div></div>'
