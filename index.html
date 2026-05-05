@@ -723,7 +723,17 @@ function renderAvailList(mid){
         const btn=document.createElement('button');
         btn.className='tog'+(av===val?' '+cls:'');
         btn.textContent=lbl;
-        (function(m2,u2,v2){btn.addEventListener('click',function(){setAv(m2,u2,v2);});})(mid,p.id,val);
+        (function(m2,u2,v2,b){b.addEventListener('click',function(){
+          if(isMgr&&!me){
+            if(b.dataset.pending==='1'){b.dataset.pending='0';setAv(m2,u2,v2);}
+            else{
+              b.dataset.pending='1';
+              const origTxt=b.textContent,origCls=b.className;
+              b.textContent='Sure?';b.style.background='#b45309';b.style.color='#fff';b.style.borderColor='#b45309';
+              setTimeout(function(){if(b.dataset.pending==='1'){b.dataset.pending='0';b.textContent=origTxt;b.className=origCls;b.style.cssText='';}},3000);
+            }
+          } else {setAv(m2,u2,v2);}
+        });})(mid,p.id,val,btn);
         grp.appendChild(btn);
       });
       row.appendChild(grp);
