@@ -315,7 +315,7 @@ function toast(msg){
 }
 
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
-function fbSet(path,val){if(DEMO_MODE||!window._db)return;window._set(window._ref(window._db,path),val);}
+function fbSet(path,val){if(DEMO_MODE||!window._db)return;window._set(window._ref(window._db,path),val).catch(function(e){console.error('Firebase write failed:',path,e);});}
 function fbGet(path){return window._get(window._ref(window._db,path));}
 
 function initFB(){
@@ -410,7 +410,7 @@ function doRegister(){
   if(np!==conf){showErr('PINs do not match.');return;}
   if(np==='1000'){showErr('Choose a different PIN.');return;}
   const all=Object.values(DB.users).length?Object.values(DB.users):SEEDS;
-  if(all.find(u=>u.name.toLowerCase()===name.toLowerCase())){showErr('Name already registered.');return;}
+  if(all.find(u=>u.name&&u.name.toLowerCase()===name.toLowerCase())){showErr('Name already registered.');return;}
   const uid='u_'+Date.now().toString(36);
   fbSet('sandhurst/users/'+uid,{id:uid,name,role:'member',pin:hp(np),mustChange:false,status:'pending',captain:false,keeper:false});
   addNotif('New player registered: '+name,'manager',null,'registration');
@@ -561,7 +561,7 @@ function addPlayer(){
   const role=document.getElementById('ap-role')?document.getElementById('ap-role').value:'member';
   if(name.length<2){toast('Enter a full name');return;}
   const all=Object.values(DB.users).length?Object.values(DB.users):SEEDS;
-  if(all.find(u=>u.name.toLowerCase()===name.toLowerCase())){toast('Name already exists');return;}
+  if(all.find(u=>u.name&&u.name.toLowerCase()===name.toLowerCase())){toast('Name already exists');return;}
   const uid='u_'+Date.now().toString(36);
   fbSet('sandhurst/users/'+uid,{id:uid,name,role,pin:hp('1000'),mustChange:true,status:'active',captain:false,keeper:false});
   addNotif(name+' added to the squad by manager','all',null,'registration');
