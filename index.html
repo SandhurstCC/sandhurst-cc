@@ -270,7 +270,7 @@ function updPin(p,mc){
 }
 
 // ── FIREBASE DB ───────────────────────────────────────────────────────────────
-let DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},notifs:[],live:false};
+let DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},notifs:[],tea:{},live:false};
 
 // ── UI STATE ──────────────────────────────────────────────────────────────────
 let UI={
@@ -331,6 +331,7 @@ function initFB(){
   window._onValue(window._ref(window._db,'sandhurst/matches'),s=>{if(DEMO_MODE)return;DB.matches=s.val()||{};DB.live=true;if(!DB.matches[UI.mid])UI.mid=Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;if(!noRe.includes(UI.screen))render();});
   window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{if(DEMO_MODE)return;DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
   window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{if(DEMO_MODE)return;const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/tea'),s=>{if(DEMO_MODE)return;DB.tea=s.val()||{};if(!noRe.includes(UI.screen))render();});
   function loadAvail(){if(DEMO_MODE)return;fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});}
   function loadSquad(){if(DEMO_MODE)return;fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});}
   if(!DEMO_MODE){loadAvail();loadSquad();}
@@ -444,7 +445,7 @@ function setAv(mid,uid,val){
   }
 }
 
-function getTea(mid){return (DB.avail[mid]||{}).__tea__||null;}
+function getTea(mid){return DB.tea[mid]||null;}
 
 function setTea(mid){
   if(!SES.uid)return;
@@ -453,10 +454,8 @@ function setTea(mid){
   const current=getTea(mid);
   if(current&&current!==SES.uid){toast('Already taken by '+((DB.users[current]||{}).name||'someone'));return;}
   const newVal=current===SES.uid?null:SES.uid;
-  if(!DB.avail[mid])DB.avail[mid]={};
-  if(newVal)DB.avail[mid].__tea__=newVal;
-  else delete DB.avail[mid].__tea__;
-  fbSet('sandhurst/avail/'+mid+'/__tea__',newVal||null);
+  DB.tea[mid]=newVal||null;
+  fbSet('sandhurst/tea/'+mid,newVal||null);
   if(newVal){const m=getM(mid);addNotif(SES.name+' volunteered to make tea for vs '+(m?m.opponent:'match')+' ('+fmtD(m?m.date:'')+')','manager',mid,'tea');}
   render();
 }
