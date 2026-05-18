@@ -168,7 +168,7 @@ function enterDemo(){
 
 function exitDemo(){
   DEMO_MODE=false;
-  DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},notifs:[],live:false};
+  DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},notifs:[],tea:{},live:false};
   clearSes();
   UI.screen='login';UI.tab=0;UI.memTab=0;
   render();
@@ -284,8 +284,8 @@ let UI={
 const ini  = n => n.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
 const fmtD = d => {if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];};
 const allP = () => {
-  const from=Object.values(DB.users).filter(u=>u.status==='active');
-  const list=(from.length?from:SEEDS.filter(u=>u.status==='active')).sort((a,b)=>a.name.localeCompare(b.name));
+  const from=Object.values(DB.users).filter(u=>u.status==='active'&&u.name);
+  const list=(from.length?from:SEEDS.filter(u=>u.status==='active'&&u.name)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   if(!SES.uid)return list;
   const me=list.find(p=>p.id===SES.uid);
   if(!me)return list;
@@ -332,16 +332,11 @@ function initFB(){
   window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{if(DEMO_MODE)return;DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
   window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{if(DEMO_MODE)return;const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
   window._onValue(window._ref(window._db,'sandhurst/tea'),s=>{if(DEMO_MODE)return;DB.tea=s.val()||{};if(!noRe.includes(UI.screen))render();});
-  function loadAvail(){if(DEMO_MODE)return;fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});}
-  function loadSquad(){if(DEMO_MODE)return;fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});}
-  if(!DEMO_MODE){loadAvail();loadSquad();}
+  window._onValue(window._ref(window._db,'sandhurst/avail'),s=>{if(DEMO_MODE)return;const v=s.val();if(v){DB.avail=v;if(!noRe.includes(UI.screen))render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};if(!noRe.includes(UI.screen))render();});}});
+  window._onValue(window._ref(window._db,'sandhurst/squad'),s=>{if(DEMO_MODE)return;DB.squad=s.val()||{};if(!noRe.includes(UI.screen))render();});
 }
 
-function refreshAvSq(){
-  if(DEMO_MODE)return;
-  fbGet('sandhurst/avail').then(s=>{if(s.val()){DB.avail=s.val();render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};render();});}});
-  fbGet('sandhurst/squad').then(s=>{DB.squad=s.val()||{};render();});
-}
+function refreshAvSq(){}
 
 function addNotif(text,target,mid,type){
   const id='n'+Date.now();
@@ -377,7 +372,7 @@ function doLogin(){
 }
 
 function tryLogin(users,name,pin){
-  const user=users.find(u=>u.name.toLowerCase()===name&&u.status==='active');
+  const user=users.find(u=>u.name&&u.name.toLowerCase()===name&&u.status==='active');
   if(!user){showErr('Name not recognised. Check spelling or register below.');return;}
   if(user.pin!==hp(pin)){showErr('Incorrect PIN.');return;}
   saveSes(user);
