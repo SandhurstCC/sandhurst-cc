@@ -307,7 +307,7 @@ const unread=()=>DB.notifs.filter(n=>{
 }).length;
 
 function saveMatchScroll(el){try{sessionStorage.setItem('ms_scroll',el.scrollLeft);}catch(e){}}
-function restoreMatchScroll(){try{const v=sessionStorage.getItem('ms_scroll');if(!v)return;setTimeout(function(){const el=document.querySelector('.match-scroll');if(el)el.scrollLeft=parseInt(v);},50);}catch(e){}}
+function restoreMatchScroll(){try{setTimeout(function(){const sel=document.querySelector('.mtab.sel');if(sel){sel.scrollIntoView({block:'nearest',inline:'center'});}else{const sc=document.querySelector('.match-scroll');const v=sessionStorage.getItem('ms_scroll');if(sc&&v)sc.scrollLeft=parseInt(v);}},50);}catch(e){}}
 function toast(msg){
   const el=document.getElementById('toast');
   el.textContent=msg;el.classList.add('show');
@@ -317,6 +317,14 @@ function toast(msg){
 // ── FIREBASE ──────────────────────────────────────────────────────────────────
 function fbSet(path,val){if(DEMO_MODE||!window._db)return;window._set(window._ref(window._db,path),val).catch(function(e){console.error('Firebase write failed:',path,e);});}
 function fbGet(path){return window._get(window._ref(window._db,path));}
+
+function mergeAvail(){
+  const a=DB._avail_new||{},b=DB._avail_old||{};
+  const mids=new Set([...Object.keys(b),...Object.keys(a)]);
+  const m={};
+  mids.forEach(function(mid){m[mid]={...(b[mid]||{}),...(a[mid]||{})};});
+  DB.avail=m;
+}
 
 function initFB(){
   if(!window._firebaseReady){document.addEventListener('firebase-ready',initFB,{once:true});return;}
@@ -332,7 +340,8 @@ function initFB(){
   window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{if(DEMO_MODE)return;DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
   window._onValue(window._ref(window._db,'sandhurst/notifications'),s=>{if(DEMO_MODE)return;const d=s.val()||{};DB.notifs=Object.values(d).sort((a,b)=>b.ts-a.ts);if(!noRe.includes(UI.screen))render();});
   window._onValue(window._ref(window._db,'sandhurst/tea'),s=>{if(DEMO_MODE)return;DB.tea=s.val()||{};if(!noRe.includes(UI.screen))render();});
-  window._onValue(window._ref(window._db,'sandhurst/avail'),s=>{if(DEMO_MODE)return;const v=s.val();if(v){DB.avail=v;if(!noRe.includes(UI.screen))render();}else{fbGet('sandhurst/availability').then(s2=>{DB.avail=s2.val()||{};if(!noRe.includes(UI.screen))render();});}});
+  window._onValue(window._ref(window._db,'sandhurst/availability'),s=>{if(DEMO_MODE)return;DB._avail_old=s.val()||{};mergeAvail();if(!noRe.includes(UI.screen))render();});
+  window._onValue(window._ref(window._db,'sandhurst/avail'),s=>{if(DEMO_MODE)return;DB._avail_new=s.val()||{};mergeAvail();if(!noRe.includes(UI.screen))render();});
   window._onValue(window._ref(window._db,'sandhurst/squad'),s=>{if(DEMO_MODE)return;DB.squad=s.val()||{};if(!noRe.includes(UI.screen))render();});
 }
 
