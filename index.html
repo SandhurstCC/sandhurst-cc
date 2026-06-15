@@ -265,7 +265,7 @@ function updPin(p,mc){
 }
 
 // ── FIREBASE DB ───────────────────────────────────────────────────────────────
-let DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},notifs:[],tea:{},live:false};
+let DB={users:{},matches:{},settings:DEF_SETTINGS,avail:{},squad:{},squadMeta:{},notifs:[],tea:{},live:false};
 
 // ── UI STATE ──────────────────────────────────────────────────────────────────
 let UI={
@@ -371,10 +371,9 @@ function initFB(){
     if(DEMO_MODE)return;
     DB.matches=s.val()||{};
     DB.live=true;
-    // Set to next upcoming match if current selection is invalid or not yet set
-    if(!UI.mid||!DB.matches[UI.mid]){
-      UI.mid=getNextMatchId()||Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;
-    }
+    const cur=DB.matches[UI.mid];
+    const curIsUpcoming=cur&&new Date(cur.date+'T'+(cur.time||'23:59')).getTime()>=Date.now()-7200000;
+    if(!curIsUpcoming){UI.mid=getNextMatchId()||Object.keys(DB.matches)[0]||SEED_MATCHES[0].id;}
     if(!noRe.includes(UI.screen))render();
   });
   window._onValue(window._ref(window._db,'sandhurst/settings'),s=>{if(DEMO_MODE)return;DB.settings={...DEF_SETTINGS,...(s.val()||{})};if(!noRe.includes(UI.screen))render();});
@@ -1153,8 +1152,6 @@ function rMgr(app){
 })();
 
 document.addEventListener('DOMContentLoaded',function(){
-  // Set initial match to next upcoming on load
-  UI.mid=getNextMatchId()||SEED_MATCHES[0].id;
   initFB();
   render();
 });
